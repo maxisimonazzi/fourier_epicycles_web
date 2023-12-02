@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visualizador de Series de Fourier</title>
+<meta name="description" content="Laboratorio de series de Fourier: epiciclos, espectro, ondas componentes y análisis de señales periódicas.">
+<script>(() => { let t = new URLSearchParams(location.search).get('tema'); try { t = t || localStorage.getItem('fourier:tema'); } catch {} if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; })();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<noscript><p>Esta página necesita JavaScript para dibujar las animaciones y hacer los cálculos.</p></noscript>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Visualizador de Series de Fourier</h1>
+      <p class="dek">Una señal periódica es una suma de senoidales. Elegí una forma de onda, sumá armónicas y mirá cómo los epiciclos la arman, qué espectro tiene y cuánta potencia lleva cada componente.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Secciones">
+      <button role="tab" id="tab-lab" aria-selected="true" aria-controls="lab" data-tab="lab" data-hash="laboratorio">Laboratorio</button>
+      <button role="tab" id="tab-ana" aria-selected="false" aria-controls="ana" data-tab="ana" data-hash="analisis" tabindex="-1">Análisis</button>
+      <button role="tab" id="tab-fun" aria-selected="false" aria-controls="fun" data-tab="fun" data-hash="fundamentos" tabindex="-1">Fundamentos</button>
+    </nav>
+  </header>
+
+  <!-- ===================== LABORATORIO ===================== -->
+  <main id="lab" class="studio" role="tabpanel" aria-labelledby="tab-lab">
+    <section class="stage-wrap" aria-label="Instrumento">
+      <div class="stage-head">
+        <h2 id="labTitle">Onda cuadrada</h2>
+        <p id="labSub"></p>
+      </div>
+      <div class="stage" id="stage">
+        <canvas id="view" role="img" aria-label="Epiciclos de Fourier a la izquierda y la onda resultante a la derecha, unidos por una línea conectora"></canvas>
+        <div class="stage-legend" aria-hidden="true">
+          <span><i class="lg-trace"></i>suma de los N términos</span>
+          <span><i class="lg-ref"></i>onda ideal</span>
+          <span><i class="lg-conn"></i>línea conectora</span>
+          <span id="lgDc"><i class="lg-dc"></i>componente continua (no gira)</span>
+        </div>
+      </div>
+      <div class="toolbar" role="group" aria-label="Animación y vista">
+        <div class="tb-play">
+          <button class="icon-btn" id="play" type="button" aria-label="Pausar"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIcon" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+          <button class="icon-btn" id="reset" type="button" aria-label="Reiniciar desde t = 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg></button>
+          <span class="time" id="time">t = 0 rad</span>
+        </div>
+        <div class="tb-range"><label for="speed">Velocidad</label><input type="range" id="speed" min="1" max="10" step="1" value="3"><output id="speedOut" for="speed"></output></div>
+        <div class="tb-range"><label for="zoom">Rango</label><input type="range" id="zoom" min="1" max="5" step="0.1" value="1.5"><output id="zoomOut" for="zoom"></output></div>
+        <div class="tb-checks" role="group" aria-label="Qué mostrar">
+          <label class="tb-check"><input type="checkbox" id="showConn" checked> Conectora</label>
+          <label class="tb-check"><input type="checkbox" id="showRef" checked> Onda ideal</label>
+          <label class="tb-check"><input type="checkbox" id="showCircles" checked> Círculos</label>
+          <label class="tb-check"><input type="checkbox" id="showGrid" checked> Retícula</label>
+        </div>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="lab-charts">
+        <figure class="scope-card">
+          <figcaption>Espectro de amplitud <span id="labSpecCap">Aₙ de cada armónica</span></figcaption>
+          <canvas id="labSpec" role="img" aria-label="Espectro de amplitud de las armónicas sumadas"></canvas>
+          <p class="scope-note" id="labSpecNote"></p>
+        </figure>
+        <figure class="scope-card">
+          <figcaption>Ondas componentes <span>cada armónica por separado y su suma</span></figcaption>
+          <canvas id="labComp" role="img" aria-label="Cada armónica dibujada por separado, y abajo su suma"></canvas>
+          <p class="scope-note" id="labCompNote"></p>
+        </figure>
+      </div>
+      <p class="fine lab-tip">Pasá el puntero sobre el espectro o sobre una onda componente para resaltar su círculo en los epiciclos. Atajos: <kbd>Espacio</kbd> reproducir, <kbd>R</kbd> reiniciar, <kbd>+</kbd> y <kbd>−</kbd> para sumar o quitar términos.</p>
+    </section>
+
+    <aside class="panel" aria-label="Controles">
+      <section class="sec">
+        <h2><span class="num">1</span>Señal</h2>
+        <div class="waves" role="group" aria-label="Forma de onda" data-bind="wave">
+          <button type="button" class="wave-btn" data-v="cuadrada" aria-pressed="true"><svg viewBox="0 0 48 24" aria-hidden="true"><path d="M2 18H8V6H20V18H32V6H44V12"/></svg><span>Cuadrada</span></button>
+          <button type="button" class="wave-btn" data-v="triangular" aria-pressed="false"><svg viewBox="0 0 48 24" aria-hidden="true"><path d="M2 12L8 5L20 19L32 5L44 19L46 16.7"/></svg><span>Triangular</span></button>
+          <button type="button" class="wave-btn" data-v="sierra" aria-pressed="false"><svg viewBox="0 0 48 24" aria-hidden="true"><path d="M2 12L14 5V19L34 5V19L46 10.6"/></svg><span>Diente de sierra</span></button>
+          <button type="button" class="wave-btn" data-v="rectificada" aria-pressed="false"><svg viewBox="0 0 48 24" aria-hidden="true"><path d="M2 19Q9.3 -1 16.7 19Q24 -1 31.3 19Q38.7 -1 46 19"/></svg><span>Rectificada</span></button>
+        </div>
+        <div class="field">
+          <span class="lbl" id="dcLbl">Componente continua</span>
+          <div class="seg" role="group" aria-labelledby="dcLbl" data-bind="dc">
+            <button type="button" data-v="0" aria-pressed="true">AC · sin continua</button>
+            <button type="button" data-v="1" aria-pressed="false">DC · suma 1</button>
+          </div>
+          <p class="fine" data-hint="dc"></p>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2><span class="num">2</span>Armónicas</h2>
+        <div class="field">
+          <div class="lbl"><label for="nNum">Términos sumados</label><input type="number" id="nNum" class="num-in" min="1" max="200" step="1" value="3" inputmode="numeric" autocomplete="off"></div>
+          <input type="range" id="nRange" min="0" max="1000" step="1" value="207" data-bind="N" aria-label="Términos sumados (escala logarítmica)">
+          <div class="quick" role="group" aria-label="Cantidades rápidas" data-quick="N">
+            <button type="button" data-n="1">1</button><button type="button" data-n="2">2</button><button type="button" data-n="3">3</button><button type="button" data-n="5">5</button><button type="button" data-n="10">10</button><button type="button" data-n="20">20</button><button type="button" data-n="50">50</button><button type="button" data-n="100">100</button><button type="button" data-n="200">200</button>
+          </div>
+          <p class="fine">El deslizador es logarítmico: los primeros términos tienen más recorrido. Para un valor exacto, escribilo en el campo o usá sus flechas (de 1 a 200).</p>
+          <p class="fine" id="nHint"></p>
+        </div>
+        <div class="formula" id="labFormula" aria-label="Serie con los términos sumados"></div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ===================== ANÁLISIS ===================== -->
+  <main id="ana" class="analysis" role="tabpanel" aria-labelledby="tab-ana" hidden>
+    <aside class="ana-side" aria-label="Parámetros del análisis">
+      <div class="ana-controls">
+        <div class="ab-field">
+          <span class="lbl" id="anaWaveLbl">Señal</span>
+          <div class="waves" role="group" aria-labelledby="anaWaveLbl" data-bind="wave">
+          <button type="button" class="wave-btn" data-v="cuadrada" aria-pressed="true"><svg viewBox="0 0 48 24" aria-hidden="true"><path d="M2 18H8V6H20V18H32V6H44V12"/></svg><span>Cuadrada</span></button>
+          <button type="button" class="wave-btn" data-v="triangular" aria-pressed="false"><svg viewBox="0 0 48 24" aria-hidden="true"><path d="M2 12L8 5L20 19L32 5L44 19L46 16.7"/></svg><span>Triangular</span></button>
+          <button type="button" class="wave-btn" data-v="sierra" aria-pressed="false"><svg viewBox="0 0 48 24" aria-hidden="true"><path d="M2 12L14 5V19L34 5V19L46 10.6"/></svg><span>Diente de sierra</span></button>
+          <button type="button" class="wave-btn" data-v="rectificada" aria-pressed="false"><svg viewBox="0 0 48 24" aria-hidden="true"><path d="M2 19Q9.3 -1 16.7 19Q24 -1 31.3 19Q38.7 -1 46 19"/></svg><span>Rectificada</span></button>
+          </div>
+          <select id="anaWaveSel" class="wave-sel" aria-labelledby="anaWaveLbl">
+            <option value="cuadrada">Cuadrada</option><option value="triangular">Triangular</option><option value="sierra">Diente de sierra</option><option value="rectificada">Rectificada</option>
+          </select>
+        </div>
+        <div class="ab-field">
+          <span class="lbl" id="anaDcLbl">Continua</span>
+          <div class="seg small" role="group" aria-labelledby="anaDcLbl" data-bind="dc">
+            <button type="button" data-v="0">AC</button><button type="button" data-v="1">DC + A</button>
+          </div>
+        </div>
+        <div class="ab-field ab-n">
+          <div class="lbl"><label for="anaNum">Términos N</label><input type="number" id="anaNum" class="num-in" min="1" max="200" step="1" value="3" inputmode="numeric" autocomplete="off"></div>
+          <input type="range" id="anaN" min="0" max="1000" step="1" value="207" data-bind="N" aria-label="Términos N (escala logarítmica)">
+          <div class="quick ab-quick" role="group" aria-label="Cantidades rápidas" data-quick="N">
+            <button type="button" data-n="1">1</button><button type="button" data-n="3">3</button><button type="button" data-n="10">10</button><button type="button" data-n="50">50</button><button type="button" data-n="100">100</button><button type="button" data-n="200">200</button>
+          </div>
+        </div>
+        <button type="button" class="btn units-toggle" id="unitsToggle" aria-expanded="false" aria-controls="anaUnits">Unidades</button>
+        <div class="ab-field units" id="anaUnits">
+          <label for="amp">Amplitud A<span class="in"><input type="text" inputmode="decimal" id="amp" value="1" autocomplete="off" spellcheck="false"> V</span></label>
+          <label for="f0">Frecuencia f₀<span class="in"><input type="text" inputmode="decimal" id="f0" value="50" autocomplete="off" spellcheck="false"> Hz</span></label>
+          <label for="res">Carga R<span class="in"><input type="text" inputmode="decimal" id="res" value="1" autocomplete="off" spellcheck="false"> Ω</span></label>
+        </div>
+      </div>
+      <nav class="ana-toc" id="anaToc" aria-label="Secciones del análisis">
+        <a href="#cardParams">Parámetros</a><a href="#cardSpec">Espectro</a><a href="#cardPower">Potencia</a><a href="#cardTHD">Distorsión</a><a href="#cardConv">Convergencia</a><a href="#cardGibbs">Gibbs</a><a href="#cardAcf">Autocorrelación</a><a href="#cardSym">Simetrías</a><a href="#cardCoef">Coeficientes</a>
+      </nav>
+    </aside>
+    <div class="ana-main">
+    <p class="ana-lead" id="anaLead"></p>
+
+    <div class="ana-grid">
+      <article class="card" id="cardParams">
+        <header><h3>Parámetros de la señal</h3><p>Los valores de la señal ideal (con su expresión exacta) y los de la suma de N términos.</p></header>
+        <div class="scroll-x"><table class="metrics" id="paramsTable"><thead><tr><th scope="col">Magnitud</th><th scope="col">Ideal</th><th scope="col">Con N términos</th><th scope="col">Desvío</th></tr></thead><tbody></tbody></table></div>
+        <p class="note" id="paramsNote"></p>
+      </article>
+
+      <article class="card" id="cardSpec">
+        <header><h3>Espectro</h3><p id="specSub">Amplitud de cada armónica.</p></header>
+        <div class="card-tools">
+          <div class="seg small" role="group" aria-label="Qué espectro mostrar" data-bind="specMode">
+            <button type="button" data-v="amp">Amplitud</button><button type="button" data-v="fase">Fase</button><button type="button" data-v="pot">Potencia</button><button type="button" data-v="bil">Bilateral</button>
+          </div>
+          <div class="seg small" role="group" aria-label="Escala vertical" data-bind="specScale">
+            <button type="button" data-v="lin">Lineal</button><button type="button" data-v="db">dB</button>
+          </div>
+        </div>
+        <canvas id="anaSpec" class="chart" style="height:260px" role="img" aria-label="Espectro de la señal"></canvas>
+        <div class="legend" id="specLegend"></div>
+        <p class="note" id="specNote"></p>
+      </article>
+
+      <article class="card" id="cardPower">
+        <header><h3>Potencia y teorema de Parseval</h3><p>La potencia media se reparte entre las armónicas sin términos cruzados: cada una aporta \(A_n^2/2\).</p></header>
+        <div class="math-block">\[ P = \frac{1}{T}\int_T x^2(t)\,dt = \Big(\frac{a_0}{2}\Big)^2 + \sum_{n=1}^{\infty}\frac{A_n^2}{2} = \sum_{n=-\infty}^{\infty}|c_n|^2 \]</div>
+        <dl class="kv" id="powerKV"></dl>
+        <p class="sub-cap">Potencia de alterna captada <span>según N, en escala logarítmica</span></p>
+        <canvas id="anaPow" class="chart" style="height:190px" role="img" aria-label="Porcentaje de la potencia de alterna captada según la cantidad de términos"></canvas>
+        <div class="scroll-x"><table class="mini" id="bwTable"></table></div>
+        <p class="note" id="powNote"></p>
+      </article>
+
+      <article class="card" id="cardTHD">
+        <header><h3>Distorsión armónica</h3><p>Cuánto se aparta la señal de una senoidal pura de la frecuencia fundamental.</p></header>
+        <div class="math-block">\[ \mathrm{THD}_F = \frac{\sqrt{\sum_{n\ne 1} V_n^2}}{V_1}, \qquad \mathrm{THD}_R = \frac{\sqrt{\sum_{n\ne 1} V_n^2}}{V_{\mathrm{ac}}} \]\[ \frac{V_1}{V_{\mathrm{ac}}} = \frac{1}{\sqrt{1+\mathrm{THD}_F^2}} \]</div>
+        <div class="scroll-x"><table class="metrics" id="thdTable"><thead><tr><th scope="col">Magnitud</th><th scope="col">Ideal</th><th scope="col">Con N términos</th></tr></thead><tbody></tbody></table></div>
+        <p class="note" id="thdNote"></p>
+      </article>
+
+      <article class="card" id="cardConv">
+        <header><h3>Convergencia</h3><p>Qué tan rápido se achican los coeficientes y el error eficaz al sumar más términos.</p></header>
+        <div class="twin">
+          <figure><figcaption class="sub-cap">Decaimiento de Aₙ <span>escala log-log</span></figcaption><canvas id="anaDecay" class="chart" role="img" aria-label="Amplitud de cada armónica en escala logarítmica"></canvas></figure>
+          <figure><figcaption class="sub-cap">Error eficaz según N <span>escala log-log</span></figcaption><canvas id="anaErr" class="chart" role="img" aria-label="Error eficaz de la aproximación según la cantidad de términos"></canvas></figure>
+        </div>
+        <div class="legend" id="convLegend"></div>
+        <p class="note" id="convNote"></p>
+      </article>
+
+      <article class="card" id="cardGibbs">
+        <header><h3>Fenómeno de Gibbs</h3><p id="gibbsSub"></p></header>
+        <div class="card-tools">
+          <label class="check"><input type="checkbox" id="gLanczos"> Comparar con σ de Lanczos</label>
+          <label class="check"><input type="checkbox" id="gFejer"> Comparar con Fejér</label>
+        </div>
+        <canvas id="anaGibbs" class="chart" style="height:220px" role="img" aria-label="Detalle de la señal y de la suma parcial cerca del salto o de la esquina"></canvas>
+        <div class="legend" id="gibbsLegend"></div>
+        <p class="sub-cap" id="gibbsNCap">Sobrepico según N <span>% del salto</span></p>
+        <canvas id="anaGibbsN" class="chart" style="height:150px" role="img" aria-label="Sobrepico o error máximo según la cantidad de términos"></canvas>
+        <div class="scroll-x"><table class="mini" id="gibbsTable"></table></div>
+        <p class="note" id="gibbsNote"></p>
+      </article>
+
+      <article class="card" id="cardAcf">
+        <header><h3>Autocorrelación y densidad espectral</h3><p>\(R_x(\tau)\) mide cuánto se parece la señal a sí misma corrida un tiempo \(\tau\). Su transformada de Fourier es la densidad espectral de potencia (Wiener-Khinchin).</p></header>
+        <div class="math-block">\[ R_x(\tau) = \frac{1}{T}\int_T x(t)\,x(t+\tau)\,dt = \sum_{n}|c_n|^2 e^{jn\omega_0\tau} \]\[ S_x(f) = \sum_{n}|c_n|^2\,\delta(f-nf_0) \]</div>
+        <canvas id="anaAcf" class="chart" style="height:200px" role="img" aria-label="Autocorrelación de la señal ideal y de la suma de N términos"></canvas>
+        <div class="legend" id="acfLegend"></div>
+        <p class="note" id="acfNote"></p>
+      </article>
+
+      <article class="card" id="cardSym">
+        <header><h3>Simetrías</h3><p>Las simetrías de la forma de onda deciden qué coeficientes valen cero, antes de hacer ninguna integral.</p></header>
+        <ul class="symlist" id="symList"></ul>
+        <p class="note" id="symNote"></p>
+      </article>
+
+      <article class="card wide" id="cardCoef">
+        <header><h3>Coeficientes de Fourier</h3><p id="coefSub"></p></header>
+        <div class="card-tools">
+          <div class="coef-expr tex-dyn" id="coefExpr"></div>
+          <button class="btn" type="button" id="copyCoef">Copiar tabla</button>
+          <p class="status" id="copyStatus" role="status"></p>
+        </div>
+        <div class="coef-wrap"><table class="data" id="coefTable"></table></div>
+        <p class="note" id="coefNote"></p>
+      </article>
+    </div>
+    </div>
+  </main>
+
+  <!-- ===================== FUNDAMENTOS ===================== -->
+  <main id="fun" class="explain" role="tabpanel" aria-labelledby="tab-fun" hidden>
+    <article>
+      <p class="lead">Fourier mostró que una señal periódica se puede escribir como una suma de senoidales cuyas frecuencias son múltiplos enteros de una frecuencia fundamental. El Laboratorio arma esa suma con vectores que giran; el Análisis mide lo que esa descomposición dice de la señal. Esta pestaña junta la teoría que usan los dos.</p>
+
+      <h2><span class="step">1</span>La serie trigonométrica</h2>
+      <p>Si \(x(t)\) se repite cada \(T\) segundos y \(\omega_0 = 2\pi/T\) es su pulsación fundamental,</p>
+      <div class="math">\[ x(t) = \frac{a_0}{2} + \sum_{n=1}^{\infty}\Big[a_n\cos(n\omega_0 t) + b_n\operatorname{sen}(n\omega_0 t)\Big], \]</div>
+      <div class="math">\[ a_n = \frac{2}{T}\int_{T} x(t)\cos(n\omega_0 t)\,dt, \qquad b_n = \frac{2}{T}\int_{T} x(t)\operatorname{sen}(n\omega_0 t)\,dt. \]</div>
+      <ul>
+        <li>\(a_0/2\) es el valor medio de la señal: su componente continua.</li>
+        <li>El término de frecuencia \(n f_0\) es la armónica \(n\). La armónica 1 es la fundamental.</li>
+        <li>En el Laboratorio \(T = 2\pi\), así que \(\omega_0 = 1\) y la armónica \(n\) es \(\operatorname{sen}(nt)\) o \(\cos(nt)\).</li>
+      </ul>
+      <p>Las fórmulas de los coeficientes salen de la ortogonalidad: en un período, el producto de dos senoidales de frecuencias distintas promedia cero. Si se multiplica la señal por \(\cos(n\omega_0 t)\) y se integra, de toda la suma sobrevive solo el término que tenía esa misma frecuencia.</p>
+      <p>Si en un período la señal tiene una cantidad finita de saltos, de máximos y de mínimos, y es integrable (condiciones de Dirichlet), la serie converge a \(x(t)\) en cada punto donde la señal es continua, y al promedio de los dos lados en cada salto.</p>
+
+      <h2><span class="step">2</span>Cada armónica es un vector que gira</h2>
+      <p>El seno y el coseno de una misma frecuencia se juntan en una sola senoidal con amplitud y fase:</p>
+      <div class="math">\[ a_n\cos(n\omega_0 t) + b_n\operatorname{sen}(n\omega_0 t) = A_n\operatorname{sen}(n\omega_0 t + \varphi_n), \qquad A_n = \sqrt{a_n^2 + b_n^2}, \quad \varphi_n = \operatorname{atan2}(a_n,\, b_n). \]</div>
+      <p>Un vector de largo \(A_n\) que arranca en el ángulo \(\varphi_n\) y da \(n\) vueltas por período proyecta sobre el eje vertical exactamente \(A_n\operatorname{sen}(n\omega_0 t + \varphi_n)\). Los epiciclos ponen esos vectores uno a continuación del otro, así que la altura de la punta de la cadena es la suma parcial</p>
+      <div class="math">\[ x_N(t) = \frac{a_0}{2} + \sum_{N\ \text{términos}} A_n\operatorname{sen}(n\omega_0 t + \varphi_n), \]</div>
+      <p>y la línea conectora lleva esa altura al gráfico de la derecha. En el panel de ondas componentes se ve cada proyección por separado: el punto que se mueve sobre cada una es la altura de su vector en ese instante, y la suma de esas alturas es el punto de la onda resultante.</p>
+      <p>Si en lugar de una señal se quiere dibujar una figura en el plano, la misma idea se usa con números complejos: está explicada paso a paso en <a href="../../index.html#tutorial" target="_top" data-abrir="tutorial">Del círculo al SVG</a>.</p>
+      <div class="idea"><b class="tag">Convención</b>En el Análisis la fase se mide con referencia coseno, como en Electrotecnia: \(x(t) = A_0 + \sum A_n\cos(n\omega_0 t + \theta_n)\), con \(\theta_n = \varphi_n - 90^\circ\). Ese \(\theta_n\) es también el ángulo del coeficiente complejo \(c_n\).</div>
+
+      <h2><span class="step">3</span>La forma exponencial y el espectro bilateral</h2>
+      <div class="math">\[ x(t) = \sum_{n=-\infty}^{\infty} c_n\,e^{jn\omega_0 t}, \qquad c_n = \frac{1}{T}\int_T x(t)\,e^{-jn\omega_0 t}\,dt, \qquad j = \sqrt{-1}. \]</div>
+      <p>Los coeficientes complejos se relacionan con los de la serie trigonométrica así:</p>
+      <div class="math">\[ c_0 = \frac{a_0}{2}, \qquad c_n = \frac{a_n - j\,b_n}{2}, \qquad c_{-n} = c_n^{*}, \qquad |c_n| = \frac{A_n}{2}. \]</div>
+      <p>Las frecuencias negativas aparecen porque una senoidal real es la suma de dos fasores que giran en sentidos opuestos: \(\cos\theta = \tfrac12\big(e^{j\theta} + e^{-j\theta}\big)\). El espectro bilateral reparte cada amplitud \(A_n\) en dos líneas de altura \(A_n/2\), una en \(+nf_0\) y otra en \(-nf_0\). Para una señal real el módulo es par y la fase es impar.</p>
+
+      <h2><span class="step">4</span>Las cuatro señales del Laboratorio</h2>
+      <p>Las cuatro tienen período \(2\pi\) y amplitud 1. El modo DC les suma 1, lo que solo cambia \(a_0/2\).</p>
+      <div class="cheat">
+        <div><h4>Cuadrada</h4>\[ x(t) = \operatorname{sgn}(\operatorname{sen} t) \]\[ x(t) = \frac{4}{\pi}\sum_{n\ \text{impar}} \frac{\operatorname{sen}(nt)}{n} \]Solo senos y solo armónicas impares. Los coeficientes bajan como \(1/n\) porque la señal tiene saltos.</div>
+        <div><h4>Triangular</h4>\[ x(t) = \tfrac{2}{\pi}\arcsin(\operatorname{sen} t) \]\[ x(t) = \frac{8}{\pi^2}\sum_{n\ \text{impar}} \frac{(-1)^{(n-1)/2}}{n^2}\operatorname{sen}(nt) \]Es continua pero tiene esquinas: los coeficientes bajan como \(1/n^2\) y con pocas armónicas ya se parece mucho.</div>
+        <div><h4>Diente de sierra</h4>\[ x(t) = \frac{t}{\pi}, \quad -\pi < t < \pi \]\[ x(t) = \frac{2}{\pi}\sum_{n=1}^{\infty} \frac{(-1)^{n+1}}{n}\operatorname{sen}(nt) \]Tiene todas las armónicas, pares e impares, porque no tiene simetría de media onda.</div>
+        <div><h4>Senoidal rectificada</h4>\[ x(t) = |\operatorname{sen} t| \]\[ x(t) = \frac{2}{\pi} - \frac{4}{\pi}\sum_{n\ \text{par}} \frac{\cos(nt)}{n^2 - 1} \]Es la salida de un rectificador de onda completa. Se repite cada \(\pi\), así que su fundamental real está en \(2f_0\).</div>
+      </div>
+
+      <h2><span class="step">5</span>Simetrías: qué coeficientes se anulan</h2>
+      <ul>
+        <li><strong>Par</strong>, \(x(-t) = x(t)\): todos los \(b_n\) valen cero y quedan solo cosenos. Es el caso de la rectificada.</li>
+        <li><strong>Impar</strong>, \(x(-t) = -x(t)\): todos los \(a_n\) valen cero y quedan solo senos. Las otras tres señales son impares.</li>
+        <li><strong>Media onda</strong>, \(x(t + T/2) = -x(t)\): solo hay armónicas impares. La cumplen la cuadrada y la triangular, pero no la diente de sierra.</li>
+        <li><strong>Período \(T/2\)</strong>, \(x(t + T/2) = x(t)\): solo hay armónicas pares. Le pasa a la rectificada, porque en realidad se repite cada medio período.</li>
+      </ul>
+      <p>Sumar una constante solo cambia \(a_0\); por eso, en modo DC, las simetrías se miran sobre \(x(t) - a_0/2\). Correr el origen de tiempos cambia la paridad y las fases, pero no los módulos: \(x(t - t_0)\) tiene coeficientes \(c_n\,e^{-jn\omega_0 t_0}\), con el mismo \(|c_n|\).</p>
+
+      <h2><span class="step">6</span>Potencia, valor eficaz y teorema de Parseval</h2>
+      <p>La potencia media normalizada (sobre 1 Ω) es el promedio del cuadrado de la señal. Como las senoidales de distinta frecuencia son ortogonales, se reparte entre las armónicas sin términos cruzados:</p>
+      <div class="math">\[ P = \frac{1}{T}\int_T x^2(t)\,dt = \Big(\frac{a_0}{2}\Big)^2 + \sum_{n=1}^{\infty}\frac{A_n^2}{2} = \sum_{n=-\infty}^{\infty}|c_n|^2, \qquad X_{\mathrm{rms}} = \sqrt{P}. \]</div>
+      <p>Cada armónica aporta \(A_n^2/2\), el cuadrado de su valor eficaz \(A_n/\sqrt2\). Sobre una resistencia \(R\), la potencia es \(X_{\mathrm{rms}}^2/R\). Aplicado a las señales del Laboratorio, Parseval da tres sumas famosas:</p>
+      <div class="math">\[ \text{cuadrada: } \sum_{n\ \text{impar}}\frac{1}{n^2} = \frac{\pi^2}{8}, \qquad \text{diente de sierra: } \sum_{n=1}^{\infty}\frac{1}{n^2} = \frac{\pi^2}{6}, \qquad \text{triangular: } \sum_{n\ \text{impar}}\frac{1}{n^4} = \frac{\pi^4}{96}. \]</div>
+      <h3>Densidad espectral de potencia</h3>
+      <p>Una señal periódica concentra toda su potencia en frecuencias discretas. Su densidad espectral de potencia es un tren de impulsos de Dirac, uno por armónica, cada uno con área igual a la potencia de esa armónica:</p>
+      <div class="math">\[ S_x(f) = \sum_{n=-\infty}^{\infty}|c_n|^2\,\delta(f - nf_0), \qquad \int_{-\infty}^{\infty} S_x(f)\,df = P. \]</div>
+      <p>El teorema de Wiener-Khinchin dice que \(S_x\) es la transformada de Fourier de la autocorrelación:</p>
+      <div class="math">\[ R_x(\tau) = \frac{1}{T}\int_T x(t)\,x(t+\tau)\,dt = \sum_{n}|c_n|^2 e^{jn\omega_0\tau}, \qquad R_x(0) = P. \]</div>
+      <p>\(R_x\) es periódica, con el mismo período que la señal, y pierde las fases: dos señales con los mismos \(|c_n|\) tienen la misma autocorrelación y la misma densidad espectral. La autocorrelación de la onda cuadrada es una onda triangular.</p>
+
+      <h2><span class="step">7</span>Convergencia y fenómeno de Gibbs</h2>
+      <p>Por Parseval, el error cuadrático medio de quedarse con un conjunto \(K_N\) de términos es exactamente la potencia que queda afuera:</p>
+      <div class="math">\[ e_N^2 = \frac{1}{T}\int_T \big(x(t) - x_N(t)\big)^2\,dt = \sum_{n\notin K_N}|c_n|^2. \]</div>
+      <p>Entre todas las sumas que usan esas mismas frecuencias, la serie de Fourier truncada es la de menor error cuadrático medio. Qué tan rápido baja ese error depende de qué tan suave es la señal:</p>
+      <ul>
+        <li>Con saltos (cuadrada, diente de sierra): \(|c_n| \sim 1/n\) y \(e_N \sim N^{-1/2}\). Para dividir el error por 10 hacen falta 100 veces más términos.</li>
+        <li>Continua con esquinas (triangular, rectificada): \(|c_n| \sim 1/n^2\) y \(e_N \sim N^{-3/2}\).</li>
+        <li>En general, si \(x\) tiene \(k-1\) derivadas continuas y la derivada \(k\) tiene saltos, \(|c_n|\) baja como \(1/n^{k+1}\).</li>
+      </ul>
+      <p>Cerca de un salto de altura \(\Delta\), la suma parcial se pasa alrededor de un 9 % del salto, por más términos que se sumen. Al agregar términos el sobrepico se angosta y se acerca al salto, pero su altura no baja. Es el fenómeno de Gibbs:</p>
+      <div class="math">\[ \lim_{N\to\infty}\ \text{sobrepico} = \Delta\left(\frac{1}{\pi}\int_0^{\pi}\frac{\operatorname{sen} u}{u}\,du - \frac{1}{2}\right) \approx 0{,}0895\,\Delta. \]</div>
+      <p>La convergencia en media cuadrática no garantiza que baje el error máximo. Hay dos remedios clásicos, que multiplican cada término por un factor \(\sigma_n\) que atenúa las armónicas altas (con \(n_{\max}\) la armónica más alta que se usa):</p>
+      <div class="math">\[ \text{Lanczos: } \sigma_n = \frac{\operatorname{sen}(\pi n/m)}{\pi n/m}, \qquad \text{Fejér: } \sigma_n = 1 - \frac{n}{m}, \qquad m = n_{\max} + 1. \]</div>
+      <p>Para la onda cuadrada, Lanczos baja el sobrepico a cerca de un 1,2 % del salto y Fejér lo elimina, a cambio de redondear más la transición. Los dos se pueden comparar en la pestaña Análisis.</p>
+
+      <h2><span class="step">8</span>Parámetros de una forma de onda</h2>
+      <div class="scroll-x"><table class="data">
+        <thead><tr><th scope="col">Parámetro</th><th scope="col">Definición</th></tr></thead>
+        <tbody>
+          <tr><td>Valor medio</td><td>\(X_{\mathrm{dc}} = \frac{1}{T}\int_T x\,dt = \frac{a_0}{2}\)</td></tr>
+          <tr><td>Valor medio rectificado</td><td>\(X_{\mathrm{rect}} = \frac{1}{T}\int_T |x|\,dt\)</td></tr>
+          <tr><td>Valor eficaz</td><td>\(X_{\mathrm{rms}} = \sqrt{\frac{1}{T}\int_T x^2\,dt}\)</td></tr>
+          <tr><td>Valor eficaz de alterna</td><td>\(X_{\mathrm{ac}} = \sqrt{X_{\mathrm{rms}}^2 - X_{\mathrm{dc}}^2}\)</td></tr>
+          <tr><td>Factor de cresta</td><td>\(F_c = X_{\mathrm{pico}}/X_{\mathrm{rms}}\)</td></tr>
+          <tr><td>Factor de forma</td><td>\(F_f = X_{\mathrm{rms}}/X_{\mathrm{rect}}\)</td></tr>
+          <tr><td>Factor de rizado</td><td>\(r = X_{\mathrm{ac}}/|X_{\mathrm{dc}}|\)</td></tr>
+          <tr><td>Distorsión armónica total</td><td>\(\mathrm{THD}_F = \sqrt{\sum_{n\ne1}V_n^2}\,/\,V_1\)</td></tr>
+          <tr><td>Factor de distorsión</td><td>\(V_1/V_{\mathrm{ac}} = 1/\sqrt{1+\mathrm{THD}_F^2}\)</td></tr>
+        </tbody>
+      </table></div>
+      <p>Valores de referencia para una amplitud \(A\) y sin componente continua:</p>
+      <div class="scroll-x"><table class="data">
+        <thead><tr><th scope="col">Señal</th><th scope="col">\(X_{\mathrm{rms}}\)</th><th scope="col">\(X_{\mathrm{rect}}\)</th><th scope="col">\(F_f\)</th><th scope="col">\(F_c\)</th><th scope="col">THD</th></tr></thead>
+        <tbody>
+          <tr><td>Senoidal</td><td>\(A/\sqrt2\) ≈ 0,707 A</td><td>\(2A/\pi\) ≈ 0,637 A</td><td>1,111</td><td>1,414</td><td>0</td></tr>
+          <tr><td>Cuadrada</td><td>\(A\)</td><td>\(A\)</td><td>1</td><td>1</td><td>48,3 %</td></tr>
+          <tr><td>Triangular</td><td>\(A/\sqrt3\) ≈ 0,577 A</td><td>\(A/2\)</td><td>1,155</td><td>1,732</td><td>12,1 %</td></tr>
+          <tr><td>Diente de sierra</td><td>\(A/\sqrt3\) ≈ 0,577 A</td><td>\(A/2\)</td><td>1,155</td><td>1,732</td><td>80,3 %</td></tr>
+          <tr><td>Rectificada (onda completa)</td><td>\(A/\sqrt2\) ≈ 0,707 A</td><td>\(2A/\pi\) ≈ 0,637 A</td><td>1,111</td><td>1,414</td><td>22,7 %</td></tr>
+        </tbody>
+      </table></div>
+      <p>La triangular y la diente de sierra tienen el mismo valor eficaz y los mismos factores, porque recorren los mismos valores durante el mismo tiempo, pero sus espectros son muy distintos. Los factores de forma y de cresta miran qué valores toma la señal; el espectro mira además en qué orden los toma. En la rectificada, la THD se mide respecto de su fundamental real, en \(2f_0\).</p>
+
+      <h2><span class="step">9</span>Cómo lo calcula esta página</h2>
+      <p>El Laboratorio hace lo mismo que la versión de escritorio en Python: en cada paso de tiempo suma los vectores de los N primeros términos, con amplitudes y fases de fórmula cerrada.</p>
+<pre><code>function puntoFourier(t, terminos, continua) {
+  let x = 0, y = continua;                // la componente continua no gira
+  const centros = [[0, 0], [0, y]];
+  for (const { n, A, fase, dc } of terminos) {
+    if (dc) y += A;                       // término de frecuencia cero
+    else {
+      const ang = n * t + fase;           // la armónica n da n vueltas por período
+      x += A * Math.cos(ang);
+      y += A * Math.sin(ang);             // la altura es la suma de las proyecciones
+    }
+    centros.push([x, y]);                 // centro del círculo siguiente
+  }
+  return { centros, y };                  // y = x_N(t): el punto de la onda resultante
+}</code></pre>
+      <p>El Análisis usa las fórmulas cerradas para los valores ideales y evalúa la suma parcial en 4096 instantes por período para los valores con N términos (valor medio rectificado, máximos y sobrepico). Los coeficientes se verifican con una FFT de 4096 muestras de la señal ideal; la pequeña diferencia que queda es el aliasing de las armónicas que no entran en esa grilla.</p>
+      <p class="foot">Todas las fórmulas y los valores de referencia de esta página se pueden reproducir con la pestaña Análisis. La versión original de escritorio, en Python con matplotlib, está en el repositorio <a href="https://github.com/maxisimonazzi/fourier_epicycles_matplotlib" target="_blank" rel="noopener">fourier_epicycles_matplotlib</a>.</p>
+    </article>
+  </main>
+</div>
+<div id="tip" hidden></div>
+<script src="nucleo.js"></script>
+<script src="interfaz.js"></script>
+</body>
+</html>

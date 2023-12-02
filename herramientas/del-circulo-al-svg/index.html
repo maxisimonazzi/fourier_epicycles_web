@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Del círculo al SVG</title>
+<meta name="description" content="Tutorial interactivo: cómo se calculan las ecuaciones de un dibujo hecho con epiciclos, del círculo a un SVG cualquiera.">
+<script>(() => { let t = new URLSearchParams(location.search).get('tema'); try { t = t || localStorage.getItem('fourier:tema'); } catch {} if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; })();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <h1>Del círculo al SVG</h1>
+    <p class="dek">Cómo se calculan las ecuaciones de un dibujo hecho con epiciclos, en sus dos versiones: una sola cadena (1 eje, con números complejos) o dos cadenas (2 ejes, x e y). Arranca con un círculo y termina con un SVG cualquiera. Las figuras se mueven y todas las cuentas están verificadas con la FFT.</p>
+    <div class="head-actions">
+      <a class="btn accent" href="../../index.html#taller" target="_top" data-abrir="taller">Abrir el Taller de Epiciclos</a>
+      <button class="btn" id="pauseAll" type="button">Pausar todas las animaciones</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Pasos del tutorial">
+      <p>Pasos</p>
+      <ol>
+        <li><a href="#paso-0"><span>0</span>Lo mínimo indispensable</a></li>
+        <li><a href="#paso-1"><span>1</span>El círculo</a></li>
+        <li><a href="#paso-2"><span>2</span>La elipse</a></li>
+        <li><a href="#paso-3"><span>3</span>Cómo se calcula un coeficiente</a></li>
+        <li><a href="#paso-4"><span>4</span>El cuadrado</a></li>
+        <li><a href="#paso-5"><span>5</span>El truco de los vértices</a></li>
+        <li><a href="#paso-6"><span>6</span>Triángulo y polígonos regulares</a></li>
+        <li><a href="#paso-7"><span>7</span>Cualquier polígono</a></li>
+        <li><a href="#paso-8"><span>8</span>Curvas: muestrear y sumar</a></li>
+        <li><a href="#paso-9"><span>9</span>Un SVG de verdad</a></li>
+        <li><a href="#paso-10"><span>10</span>¿Cuántos círculos hacen falta?</a></li>
+        <li><a href="#paso-11"><span>11</span>La velocidad cambia la receta</a></li>
+        <li><a href="#resumen"><span>·</span>Resumen de fórmulas</a></li>
+      </ol>
+    </nav>
+
+    <article class="lessons">
+      <!-- 0 -->
+      <section class="lesson" id="paso-0">
+        <h2><span class="no">0</span>Lo mínimo indispensable</h2>
+        <p>Dos ideas alcanzan para todo el tutorial.</p>
+        <ol>
+          <li><strong>Un punto del plano es un número complejo.</strong> El punto \((x, y)\) se escribe \(z = x + iy\). Sumar números complejos es sumar vectores, poniéndolos punta con cola.</li>
+          <li><strong>Girar es multiplicar.</strong> Por la fórmula de Euler, \(e^{i\theta} = \cos\theta + i\,\operatorname{sen}\theta\) es un vector de largo 1 que forma un ángulo \(\theta\) con el eje \(x\). Multiplicar cualquier \(z\) por \(e^{i\theta}\) lo gira un ángulo \(\theta\) sin cambiarle el largo.</li>
+        </ol>
+        <p>Si el ángulo crece con el tiempo, el vector gira. En todo el tutorial el tiempo \(t\) va de 0 a 1: en ese lapso el lápiz recorre el dibujo una vez completa. El vector \(e^{2\pi i t}\) da justo una vuelta en ese tiempo, en sentido antihorario. Su sombra sobre el eje \(x\) es \(\cos 2\pi t\) y su sombra sobre el eje \(y\) es \(\operatorname{sen} 2\pi t\).</p>
+        <figure class="fig" id="figA">
+          <div class="fig-body">
+            <div class="stagebox"><canvas class="stage" style="aspect-ratio: 2.3"></canvas></div>
+          </div>
+          <p class="live" aria-hidden="true"></p>
+          <figcaption><b>El vector que gira y sus dos sombras.</b> A la izquierda, \(e^{2\pi i t}\). A la derecha, sus sombras en función del tiempo: la horizontal es \(\cos 2\pi t\) (verde) y la vertical es \(\operatorname{sen} 2\pi t\) (naranja).</figcaption>
+        </figure>
+        <div class="idea"><b class="tag">Idea</b>Esa sombra es la clave de los dos modos. En 1 eje se usa el vector que gira, entero. En 2 ejes se usa solo su sombra sobre un eje, igual que un fasor en un circuito de alterna.</div>
+        <p class="note">Uso el eje \(y\) hacia arriba, como en matemática. En un SVG la \(y\) apunta hacia abajo; eso solo invierte el sentido de giro en pantalla.</p>
+      </section>
+
+      <!-- 1 -->
+      <section class="lesson" id="paso-1">
+        <h2><span class="no">1</span>El círculo</h2>
+        <h3>Con 2 ejes</h3>
+        <p>Un círculo de radio \(R\) centrado en el origen es</p>
+        <div class="math">\[ x(t) = R\cos 2\pi t, \qquad y(t) = R\,\operatorname{sen} 2\pi t. \]</div>
+        <p>Cada coordenada es una sola onda. En el modo de 2 ejes cada coordenada se escribe como una serie de Fourier real, la misma que usás para una onda cuadrada:</p>
+        <div class="math">\[ \begin{aligned} x(t) &= a_0 + \sum_{k\ge 1}\big(a_k\cos 2\pi k t + b_k\,\operatorname{sen} 2\pi k t\big), \\ y(t) &= p_0 + \sum_{k\ge 1}\big(p_k\cos 2\pi k t + q_k\,\operatorname{sen} 2\pi k t\big). \end{aligned} \]</div>
+        <p>Para el círculo, \(a_1 = R\), \(q_1 = R\) y todo lo demás vale 0. Cada eje tiene su propia cadena: la de arriba dibuja la \(x\) con un círculo de radio \(R\) y la de la izquierda dibuja la \(y\) con otro. El lápiz va donde se cruzan las guías. En total son 2 círculos.</p>
+        <p class="note">En el reel del colibrí y en el Taller, los coeficientes de \(y\) se llaman \(c_k\) y \(d_k\). Acá los llamo \(p_k\) y \(q_k\) para no confundirlos con los \(c_n\) del modo de 1 eje.</p>
+        <h3>Con 1 eje</h3>
+        <p>Si juntamos las dos coordenadas en un número complejo, aparece un solo vector que gira:</p>
+        <div class="math">\[ z(t) = x + iy = R\cos 2\pi t + iR\,\operatorname{sen} 2\pi t = R\,e^{2\pi i t}. \]</div>
+        <p>En general, el modo de 1 eje escribe el dibujo como una suma de vectores que giran a velocidades enteras:</p>
+        <div class="math">\[ z(t) = \sum_{n=-\infty}^{\infty} c_n\, e^{2\pi i n t}. \]</div>
+        <p>Para el círculo, \(c_1 = R\) y todos los demás valen 0: un solo círculo.</p>
+        <h3>Moverlo, girarlo y acelerarlo</h3>
+        <ul>
+          <li><strong>Centro en \((x_0, y_0)\):</strong> aparece \(c_0 = x_0 + iy_0\), el término que no gira. En 2 ejes, \(a_0 = x_0\) y \(p_0 = y_0\).</li>
+          <li><strong>Arrancar en el ángulo \(\varphi\):</strong> \(c_1 = R\,e^{i\varphi}\). El módulo de \(c_1\) es el radio; su argumento es el ángulo de arranque.</li>
+          <li><strong>Girar en sentido horario:</strong> \(c_{-1} = R\). El signo del índice es el sentido de giro.</li>
+          <li><strong>Dar dos vueltas por ciclo:</strong> \(c_2 = R\). El índice es la cantidad de vueltas.</li>
+        </ul>
+        <figure class="fig" id="figB">
+          <div class="fig-body side">
+            <div class="stagebox"><canvas class="stage" style="aspect-ratio: 1.15"></canvas></div>
+            <div class="ctrl">
+              <div class="seg" data-k="mode" role="group" aria-label="Modo"><button type="button" data-v="1" aria-pressed="true">1 eje</button><button type="button" data-v="2" aria-pressed="false">2 ejes</button></div>
+              <label class="rng"><span>Radio R <output data-o="R"></output></span><input type="range" data-k="R" min="0.2" max="1" step="0.05" value="0.8"></label>
+              <label class="rng"><span>Ángulo de arranque φ <output data-o="phi"></output></span><input type="range" data-k="phi" min="-180" max="180" step="5" value="30"></label>
+              <div class="seg" data-k="n" role="group" aria-label="Vueltas por ciclo"><button type="button" data-v="-2" aria-pressed="false">n = −2</button><button type="button" data-v="-1" aria-pressed="false">−1</button><button type="button" data-v="1" aria-pressed="true">1</button><button type="button" data-v="2" aria-pressed="false">2</button></div>
+              <div class="eq" aria-live="polite"></div>
+            </div>
+          </div>
+          <figcaption><b>El círculo en los dos modos.</b> Cambiá el radio, el ángulo de arranque y las vueltas por ciclo; la ecuación de la derecha se actualiza con los números.</figcaption>
+        </figure>
+        <div class="idea"><b class="tag">Idea</b>Cada coeficiente \(c_n\) es un círculo. Su módulo \(|c_n|\) es el radio, su argumento \(\arg c_n\) es el ángulo de arranque y \(n\) es la cantidad de vueltas por ciclo, con signo.</div>
+      </section>
+
+      <!-- 2 -->
+      <section class="lesson" id="paso-2">
+        <h2><span class="no">2</span>La elipse</h2>
+        <p>La elipse \(x = a\cos 2\pi t\), \(y = b\,\operatorname{sen} 2\pi t\) sigue siendo fácil en 2 ejes: \(a_1 = a\) y \(q_1 = b\), un círculo por eje. En 1 eje aparece algo nuevo. Usando \(\cos\theta = \tfrac{1}{2}(e^{i\theta}+e^{-i\theta})\) y \(\operatorname{sen}\theta = \tfrac{1}{2i}(e^{i\theta}-e^{-i\theta})\):</p>
+        <div class="math">\[ z = a\cos\theta + i\,b\,\operatorname{sen}\theta = \frac{a+b}{2}\,e^{i\theta} + \frac{a-b}{2}\,e^{-i\theta}, \qquad \theta = 2\pi t. \]</div>
+        <p>Son dos círculos que giran en sentidos opuestos: \(c_1 = \tfrac{a+b}{2}\) y \(c_{-1} = \tfrac{a-b}{2}\). Si \(a = b\), \(c_{-1}\) se anula y queda el círculo. Si \(b = 0\), los dos círculos son iguales y el lápiz va y viene sobre un segmento.</p>
+        <figure class="fig" id="figC">
+          <div class="fig-body side">
+            <div class="stagebox"><canvas class="stage" style="aspect-ratio: 1.15"></canvas></div>
+            <div class="ctrl">
+              <div class="seg" data-k="mode" role="group" aria-label="Modo"><button type="button" data-v="1" aria-pressed="true">1 eje</button><button type="button" data-v="2" aria-pressed="false">2 ejes</button></div>
+              <label class="rng"><span>Semieje a <output data-o="a"></output></span><input type="range" data-k="a" min="0" max="1" step="0.05" value="1"></label>
+              <label class="rng"><span>Semieje b <output data-o="b"></output></span><input type="range" data-k="b" min="0" max="1" step="0.05" value="0.45"></label>
+              <div class="eq" aria-live="polite"></div>
+            </div>
+          </div>
+          <figcaption><b>Una elipse son dos círculos opuestos.</b> Probá \(b = a\) (desaparece uno) y \(b = 0\) (el lápiz va y viene).</figcaption>
+        </figure>
+        <h3>El traductor entre los dos modos</h3>
+        <p>Repitiendo esa cuenta con un armónico cualquiera sale la equivalencia completa. El armónico \(k\) de cada eje se reparte entre el par \(c_k\), \(c_{-k}\):</p>
+        <div class="math">\[ \begin{aligned} c_k &= \tfrac12\big[(a_k + q_k) + i\,(p_k - b_k)\big], \\ c_{-k} &= \tfrac12\big[(a_k - q_k) + i\,(p_k + b_k)\big], \\ c_0 &= a_0 + i\,p_0. \end{aligned} \]</div>
+        <p>Y al revés:</p>
+        <div class="math">\[ \begin{aligned} a_k &= \operatorname{Re}(c_k + c_{-k}), & b_k &= \operatorname{Im}(c_{-k} - c_k), \\ p_k &= \operatorname{Im}(c_k + c_{-k}), & q_k &= \operatorname{Re}(c_k - c_{-k}). \end{aligned} \]</div>
+        <p>Para dibujar el armónico \(k\) de un eje como un círculo se usa la forma amplitud y fase, igual que con un fasor:</p>
+        <div class="math">\[ a_k\cos 2\pi k t + b_k\,\operatorname{sen} 2\pi k t = A_k\cos(2\pi k t - \varphi_k), \]
+        \[ A_k = \sqrt{a_k^2 + b_k^2}, \qquad \varphi_k = \operatorname{atan2}(b_k, a_k). \]</div>
+        <p>\(A_k\) es el radio de ese círculo en la cadena del eje y \(\varphi_k\) es su desfase.</p>
+        <div class="idea"><b class="tag">Idea</b>En 2 ejes, cada armónico de cada eje es un círculo. En 1 eje, el mismo armónico necesita uno o dos: uno si \(c_k\) o \(c_{-k}\) vale cero. Por eso el círculo usa 1 círculo complejo pero 2 en el modo de 2 ejes, y la elipse usa 2 en los dos modos.</div>
+      </section>
+
+      <!-- 3 -->
+      <section class="lesson" id="paso-3">
+        <h2><span class="no">3</span>Cómo se calcula un coeficiente</h2>
+        <p>Hasta acá adivinamos los coeficientes mirando la fórmula. Para un dibujo cualquiera hace falta una receta, y sale de una propiedad simple: un vector que da un número entero de vueltas está, en promedio, en el origen.</p>
+        <div class="math">\[ \int_0^1 e^{2\pi i m t}\,e^{-2\pi i n t}\,dt = \begin{cases} 1 & m = n \\ 0 & m \ne n \end{cases} \]</div>
+        <p>Si multiplicamos el dibujo por \(e^{-2\pi i n t}\) y promediamos en un ciclo, todos los términos dan vueltas enteras y se anulan, menos el que giraba justo a velocidad \(n\), que queda quieto:</p>
+        <div class="math">\[ \boxed{\,c_n = \int_0^1 z(t)\,e^{-2\pi i n t}\,dt\,} \]</div>
+        <p>En palabras: girar todo el dibujo hacia atrás a velocidad \(n\) y promediar. En 2 ejes son las fórmulas de siempre, una por coordenada:</p>
+        <div class="math">\[ a_0 = \int_0^1 x\,dt, \qquad a_k = 2\int_0^1 x(t)\cos 2\pi k t\,dt, \]
+        \[ b_k = 2\int_0^1 x(t)\,\operatorname{sen} 2\pi k t\,dt, \]</div>
+        <p>y lo mismo con \(y(t)\) para \(p_k\) y \(q_k\).</p>
+        <figure class="fig" id="figD">
+          <div class="fig-body side">
+            <div class="stagebox"><canvas class="stage" style="aspect-ratio: 1.1"></canvas></div>
+            <div class="ctrl">
+              <div class="seg" data-k="shape" role="group" aria-label="Figura"><button type="button" data-v="elipse" aria-pressed="true">Elipse</button><button type="button" data-v="cuadrado" aria-pressed="false">Cuadrado</button><button type="button" data-v="casa" aria-pressed="false">Casa</button></div>
+              <label class="rng"><span>Velocidad n <output data-o="n"></output></span><input type="range" data-k="n" min="-6" max="6" step="1" value="1"></label>
+              <div class="eq" aria-live="polite"></div>
+              <div class="legend"><span><i style="background:var(--c-sample)"></i>48 puntos girados</span><span><i style="background:var(--c-trace)"></i>su promedio: \(c_n\)</span></div>
+            </div>
+          </div>
+          <figcaption><b>Girar hacia atrás y promediar.</b> Cada punto del dibujo gira hacia atrás un ángulo \(2\pi n t\) según el momento en que el lápiz pasa por él. El promedio de los puntos girados es \(c_n\). Si ningún término gira a velocidad \(n\), el promedio cae en el origen.</figcaption>
+        </figure>
+        <div class="worked"><b class="tag">Cuenta a mano</b>Para la elipse y \(n = 1\):
+          <div class="math">\[ \begin{aligned} c_1 &= \int_0^1 (a\cos\theta + i b\,\operatorname{sen}\theta)(\cos\theta - i\,\operatorname{sen}\theta)\,dt \\ &= \int_0^1 \big(a\cos^2\theta + b\,\operatorname{sen}^2\theta\big)\,dt + i\!\int_0^1 (b-a)\,\operatorname{sen}\theta\cos\theta\,dt \\ &= \frac{a+b}{2}. \end{aligned} \]</div>
+          El promedio de \(\cos^2\) y de \(\operatorname{sen}^2\) en un ciclo es \(\tfrac12\), y el de \(\operatorname{sen}\theta\cos\theta\) es 0.
+        </div>
+        <div class="idea"><b class="tag">Idea</b>Un coeficiente es un promedio. Para un dibujo cualquiera alcanza con promediar muchos puntos; eso es la DFT del paso 8.</div>
+      </section>
+
+      <!-- 4 -->
+      <section class="lesson" id="paso-4">
+        <h2><span class="no">4</span>El cuadrado</h2>
+        <p>Tomamos el cuadrado de vértices \((\pm1, \pm1)\). El lápiz va a velocidad constante, en sentido antihorario, y arranca en \((1, 0)\), el punto medio del lado derecho. El perímetro mide 8, así que cada lado se recorre en \(\tfrac14\) de ciclo.</p>
+        <h3>Con 2 ejes: la x es una onda trapezoidal</h3>
+        <p>Mientras el lápiz sube por el lado derecho, \(x\) vale 1. Por el lado de arriba baja en rampa hasta \(-1\), se queda en \(-1\) por el lado izquierdo y vuelve en rampa por abajo: es una onda trapezoidal. La \(y\) es la misma onda atrasada un cuarto de ciclo, \(y(t) = x(t - \tfrac14)\).</p>
+        <p>La trapezoidal es una onda cuadrada (\(\pm1\), que conmuta en \(t = \pm\tfrac14\)) suavizada con un promedio móvil de ancho \(\tfrac14\). La cuadrada tiene \(a_k = \tfrac{4}{\pi k}\operatorname{sen}\tfrac{k\pi}{2}\), y el promedio móvil multiplica cada armónico por \(\operatorname{sen}(k\pi/4)/(k\pi/4)\). Queda:</p>
+        <div class="math">\[ a_k = \frac{16}{\pi^2 k^2}\,\operatorname{sen}\frac{k\pi}{2}\,\operatorname{sen}\frac{k\pi}{4}, \qquad b_k = 0, \]
+        \[ q_k = (-1)^{\frac{k-1}{2}}\,a_k, \qquad p_k = 0. \]</div>
+        <p>Solo hay armónicos impares. Con tres armónicos:</p>
+        <div class="math">\[ x(t) \approx 1{,}146\cos 2\pi t - 0{,}127\cos 6\pi t - 0{,}046\cos 10\pi t \]
+        \[ y(t) \approx 1{,}146\,\operatorname{sen} 2\pi t + 0{,}127\,\operatorname{sen} 6\pi t - 0{,}046\,\operatorname{sen} 10\pi t \]</div>
+        <h3>Con 1 eje: solo n = 1, −3, 5, −7…</h3>
+        <p>Con el traductor del paso 2, \(c_k = \tfrac12(a_k + q_k)\) y \(c_{-k} = \tfrac12(a_k - q_k)\). Como \(q_k = \pm a_k\), para cada \(k\) impar sobrevive uno solo de los dos:</p>
+        <div class="math">\[ c_{4m+1} = \frac{8\sqrt2}{\pi^2}\cdot\frac{(-1)^m}{(4m+1)^2}, \qquad m = 0, \pm1, \pm2, \dots \]</div>
+        <div class="math">\[ z(t) \approx 1{,}146\,e^{2\pi i t} - 0{,}127\,e^{-6\pi i t} - 0{,}046\,e^{10\pi i t} + 0{,}023\,e^{-14\pi i t} + \cdots \]</div>
+        <p>La razón es la simetría. Girar el cuadrado 90° no lo cambia, y en el tiempo eso equivale a adelantar un cuarto de ciclo: \(z(t + \tfrac14) = i\,z(t)\). Reemplazando en la serie queda \(c_n e^{i\pi n/2} = i\,c_n\), que solo se cumple si \(c_n = 0\) o si \(n \equiv 1 \pmod 4\). Toda figura que queda igual después de girarla un \(1/k\) de vuelta usa solo los \(n \equiv 1 \pmod k\).</p>
+        <figure class="fig" id="figE">
+          <div class="fig-body side">
+            <div class="stagebox">
+              <canvas class="stage" style="aspect-ratio: 1.15"></canvas>
+              <canvas class="stage scope" style="aspect-ratio: 3.4"></canvas>
+            </div>
+            <div class="ctrl">
+              <div class="seg" data-k="mode" role="group" aria-label="Modo"><button type="button" data-v="1" aria-pressed="true">1 eje</button><button type="button" data-v="2" aria-pressed="false">2 ejes</button></div>
+              <label class="rng"><span data-l="N">Términos N <output data-o="N"></output></span><input type="range" data-k="N" min="1" max="30" step="1" value="3"></label>
+              <div class="eq" aria-live="polite"></div>
+              <div class="legend"><span><i style="background:var(--c-x)"></i>\(x(t)\) con N términos</span><span><i style="background:var(--c-ghost)"></i>trapezoidal exacta</span></div>
+            </div>
+          </div>
+          <figcaption><b>El cuadrado, término a término.</b> Abajo, la coordenada \(x(t)\): la onda trapezoidal exacta y la suma de los términos usados.</figcaption>
+        </figure>
+        <div class="idea"><b class="tag">Idea</b>Para la misma precisión, el cuadrado necesita la mitad de círculos en 1 eje que en 2 ejes: cada \(c_n\) complejo hace a la vez el trabajo de un armónico en \(x\) y de otro en \(y\).</div>
+      </section>
+
+      <!-- 5 -->
+      <section class="lesson" id="paso-5">
+        <h2><span class="no">5</span>El truco de los vértices</h2>
+        <p>Las integrales del cuadrado salieron porque ya conocíamos la onda trapezoidal. Para un polígono cualquiera hay un atajo. Integrando por partes dos veces (los términos de borde se cancelan porque todo es periódico):</p>
+        <div class="math">\[ c_n = \frac{1}{2\pi i n}\int_0^1 z'(t)\,e^{-2\pi i n t}\,dt = -\frac{1}{4\pi^2 n^2}\int_0^1 z''(t)\,e^{-2\pi i n t}\,dt. \]</div>
+        <p>En un polígono recorrido a velocidad constante, la velocidad \(z'\) es constante en cada lado y cambia de golpe en cada vértice. Entonces \(z''\) vale cero en todos lados salvo en los vértices, donde es un impulso del tamaño del cambio de velocidad \(\Delta v_k\). La integral de un impulso solo toma el valor en ese instante:</p>
+        <div class="math">\[ \boxed{\,c_n = -\frac{1}{4\pi^2 n^2}\sum_{\text{vértices}} \Delta v_k\; e^{-2\pi i n t_k}\,} \qquad (n \ne 0) \]</div>
+        <ul>
+          <li>\(t_k\) es el instante en que el lápiz llega al vértice \(k\): la fracción del perímetro recorrida hasta ahí.</li>
+          <li>\(\Delta v_k\) es la velocidad después del vértice menos la velocidad antes. La velocidad en cada lado es el vector del lado dividido por el tiempo que se tarda en recorrerlo.</li>
+          <li>\(c_0\) es el promedio del contorno: cada lado aporta su punto medio, pesado por su largo.</li>
+        </ul>
+        <p>Es el mismo truco que en electrónica: la derivada segunda de una rampa es un impulso. En 2 ejes queda una fórmula real por coordenada:</p>
+        <div class="math">\[ a_n = -\frac{1}{2\pi^2 n^2}\sum_k \Delta v^{x}_k\cos 2\pi n t_k, \]
+        \[ b_n = -\frac{1}{2\pi^2 n^2}\sum_k \Delta v^{x}_k\,\operatorname{sen} 2\pi n t_k, \]</div>
+        <p>y lo mismo con \(\Delta v^{y}_k\) para \(p_n\) y \(q_n\).</p>
+        <div class="worked"><b class="tag">Cuenta a mano</b>En el cuadrado, cada lado mide 2 y se recorre en \(\tfrac14\) de ciclo, así que la velocidad mide 8. En cada vértice la velocidad gira 90° y el cambio \(\Delta v_k\) mide \(8\sqrt2\), apuntando hacia adentro. Para \(n = 1\), los cuatro términos \(\Delta v_k\,e^{-2\pi i t_k}\) valen exactamente \(-8\sqrt2\). Entonces
+          <div class="math">\[ c_1 = -\frac{1}{4\pi^2}\,(-32\sqrt2) = \frac{8\sqrt2}{\pi^2} \approx 1{,}146, \]</div>
+          lo mismo que dio la onda trapezoidal.
+        </div>
+        <div class="idea"><b class="tag">Idea</b>No hace falta integrar: cada vértice aporta un término. La fórmula también explica por qué, cuando hay esquinas, los coeficientes bajan como \(1/n^2\).</div>
+      </section>
+
+      <!-- 6 -->
+      <section class="lesson" id="paso-6">
+        <h2><span class="no">6</span>Triángulo y polígonos regulares</h2>
+        <p>Con la fórmula de los vértices, un polígono regular de \(k\) lados y radio \(R\), recorrido desde el punto medio de un lado, da:</p>
+        <div class="math">\[ c_{1+mk} = (-1)^m\,\frac{k^2 R\,\operatorname{sen}^2(\pi/k)}{\pi^2\,(1+mk)^2}, \qquad c_n = 0 \text{ para cualquier otro } n. \]</div>
+        <p>Todos los vértices cambian la velocidad en la misma cantidad, \(4kR\,\operatorname{sen}^2(\pi/k)\), hacia adentro, y sus aportes solo se suman cuando \(n \equiv 1 \pmod k\).</p>
+        <ul>
+          <li><strong>Triángulo</strong> (\(k = 3\), \(R = 1\)): \(c_1 \approx 0{,}684\), \(c_{-2} \approx -0{,}171\), \(c_4 \approx -0{,}043\), \(c_{-5} \approx 0{,}027\), \(c_7 \approx 0{,}014\).</li>
+          <li><strong>Cuadrado</strong> (\(k = 4\), \(R = \sqrt2\)): vuelve a dar \(8\sqrt2/\pi^2\).</li>
+          <li><strong>Hexágono</strong> (\(k = 6\), \(R = 1\)): \(c_1 \approx 0{,}912\), \(c_{-5} \approx -0{,}036\), \(c_7 \approx -0{,}019\).</li>
+        </ul>
+        <p>Cuando \(k\) crece, \(k^2\operatorname{sen}^2(\pi/k)\) tiende a \(\pi^2\): \(c_1\) tiende a \(R\) y los demás se apagan. El polígono se vuelve un círculo. En 2 ejes, el triángulo usa en cada eje los armónicos 1, 2, 4, 5, 7, 8… (los que no son múltiplos de 3).</p>
+        <figure class="fig" id="figF">
+          <div class="fig-body side">
+            <div class="stagebox"><canvas class="stage" style="aspect-ratio: 1.15"></canvas></div>
+            <div class="ctrl">
+              <div class="seg" data-k="mode" role="group" aria-label="Modo"><button type="button" data-v="1" aria-pressed="true">1 eje</button><button type="button" data-v="2" aria-pressed="false">2 ejes</button></div>
+              <label class="rng"><span>Lados k <output data-o="k"></output></span><input type="range" data-k="k" min="3" max="10" step="1" value="3"></label>
+              <label class="rng"><span data-l="N">Términos N <output data-o="N"></output></span><input type="range" data-k="N" min="1" max="30" step="1" value="4"></label>
+              <div class="eq" aria-live="polite"></div>
+            </div>
+          </div>
+          <figcaption><b>Polígonos regulares.</b> Con \(k\) lados solo aparecen los términos \(n = 1,\ 1-k,\ 1+k,\ 1-2k,\dots\)</figcaption>
+        </figure>
+      </section>
+
+      <!-- 7 -->
+      <section class="lesson" id="paso-7">
+        <h2><span class="no">7</span>Cualquier polígono</h2>
+        <p>La fórmula de los vértices sirve para cualquier polígono cerrado, convexo o no. Hacé clic en la figura para agregar vértices y arrastralos para moverlos; los coeficientes se recalculan exactos, sin muestrear.</p>
+        <figure class="fig" id="figG">
+          <div class="fig-body side">
+            <div class="stagebox"><canvas class="stage edit" style="aspect-ratio: 1.15" aria-label="Editor de polígono: clic para agregar un vértice, arrastrar para moverlo"></canvas></div>
+            <div class="ctrl">
+              <div class="seg" data-k="mode" role="group" aria-label="Modo"><button type="button" data-v="1" aria-pressed="true">1 eje</button><button type="button" data-v="2" aria-pressed="false">2 ejes</button></div>
+              <label class="rng"><span data-l="N">Términos N <output data-o="N"></output></span><input type="range" data-k="N" min="1" max="60" step="1" value="12"></label>
+              <div class="rowbtns"><button class="btn" type="button" data-act="undo">Quitar el último</button><button class="btn" type="button" data-act="clear">Empezar de cero</button><button class="btn" type="button" data-act="house">Volver a la casa</button></div>
+              <p class="err" data-msg></p>
+              <div class="scroll-x"><table class="mini"><thead><tr><th>n</th><th>radio |cₙ|</th><th>arranque</th><th>cₙ</th></tr></thead><tbody></tbody></table></div>
+            </div>
+          </div>
+          <figcaption><b>Coeficientes exactos de tu polígono.</b> La tabla muestra los seis círculos más grandes. El primer renglón es \(c_0\), el centro.</figcaption>
+        </figure>
+        <p>La misma fórmula en Python, lista para usar:</p>
+<pre><code>import numpy as np
+
+def coeficiente_poligono(V, n):
+    """V: vértices en orden, como complejos x + iy. Devuelve c_n exacto."""
+    V = np.asarray(V, complex)
+    lados = np.roll(V, -1) - V                    # vector de cada lado
+    L = np.abs(lados)
+    P = L.sum()                                   # perímetro
+    t = np.r_[0, np.cumsum(L)[:-1]] / P           # instante de llegada a cada vértice
+    v = lados / (L / P)                           # velocidad en cada lado
+    dv = v - np.roll(v, 1)                        # cambio de velocidad en cada vértice
+    if n == 0:                                    # c_0: promedio del contorno
+        return ((V + np.roll(V, -1)) / 2 * L).sum() / P
+    return -(dv * np.exp(-2j * np.pi * n * t)).sum() / (4 * np.pi**2 * n**2)
+
+casa = [0, 2, 2 + 1.5j, 1 + 2.4j, 1.5j]
+print(coeficiente_poligono(casa, 1))              # (-0.8224-0.7720j)</code></pre>
+      </section>
+
+      <!-- 8 -->
+      <section class="lesson" id="paso-8">
+        <h2><span class="no">8</span>Curvas: muestrear y sumar</h2>
+        <p>Un dibujo con curvas no tiene vértices. Hay dos caminos que llegan a lo mismo: aproximar la curva con muchos lados cortitos y usar la fórmula de los vértices, o aproximar directamente la integral con una suma. Con \(M\) puntos equiespaciados \(z_k = z(k/M)\):</p>
+        <div class="math">\[ \boxed{\,c_n \approx \frac{1}{M}\sum_{k=0}^{M-1} z_k\; e^{-2\pi i n k / M}\,} \]</div>
+        <p>Es la transformada discreta de Fourier (DFT): el mismo «girar hacia atrás y promediar», con \(M\) puntos en lugar de infinitos. La FFT calcula los \(M\) coeficientes de una vez.</p>
+        <div class="worked"><b class="tag">Cuenta a mano</b>Tomemos solo las 4 esquinas del cuadrado, arrancando en \((1,1)\): \(z = (1+i,\ -1+i,\ -1-i,\ 1-i)\). Para \(n = 1\), girar hacia atrás es multiplicar el punto \(k\) por \(e^{-2\pi i k/4} = (-i)^k\):
+          <div class="math">\[ \begin{aligned} c_1 &= \tfrac14\big[(1+i)\cdot 1 + (-1+i)(-i) + (-1-i)(-1) + (1-i)(i)\big] \\ &= \tfrac14\big[(1+i) + (1+i) + (1+i) + (1+i)\big] = 1 + i. \end{aligned} \]</div>
+          Los demás (\(c_0\), \(c_2\), \(c_{-1}\)) dan 0. Con 4 puntos, la DFT ve un círculo de radio \(\sqrt2\) que pasa por las esquinas.
+        </div>
+        <p>Con más puntos, los valores se acercan a los exactos del paso 4. Como acá el lápiz arranca en una esquina, cada \(c_n\) queda multiplicado por \(e^{i\pi n/4}\):</p>
+        <div class="scroll-x">
+          <table class="data">
+            <thead><tr><th>Puntos M</th><th>c₁</th><th>c₋₃</th><th>c₅</th></tr></thead>
+            <tbody>
+              <tr><td>4</td><td>1 + 1i</td><td>no entra</td><td>no entra</td></tr>
+              <tr><td>8</td><td>0,854 + 0,854i</td><td>0,146 + 0,146i</td><td>no entra</td></tr>
+              <tr><td>16</td><td>0,821 + 0,821i</td><td>0,101 + 0,101i</td><td>0,045 + 0,045i</td></tr>
+              <tr><td>64</td><td>0,811 + 0,811i</td><td>0,091 + 0,091i</td><td>0,033 + 0,033i</td></tr>
+              <tr><td>2048</td><td>0,8106 + 0,8106i</td><td>0,0901 + 0,0901i</td><td>0,0324 + 0,0324i</td></tr>
+              <tr class="ref"><td>exacto</td><td>0,8106 + 0,8106i</td><td>0,0901 + 0,0901i</td><td>0,0324 + 0,0324i</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>La diferencia se llama aliasing. Mirando solo los \(M\) puntos, un círculo que da \(n\) vueltas es idéntico a uno que da \(n + M\), así que la DFT junta todos esos coeficientes en el mismo número. Con \(M\) puntos solo entran las velocidades de \(-M/2\) a \(M/2 - 1\). Regla práctica: usar \(M\) varias veces mayor que la cantidad de círculos que vas a dibujar. El Taller usa \(M = 2048\).</p>
+        <figure class="fig" id="figH">
+          <div class="fig-body side">
+            <div class="stagebox"><canvas class="stage" style="aspect-ratio: 1.15"></canvas></div>
+            <div class="ctrl">
+              <div class="seg" data-k="M" role="group" aria-label="Cantidad de puntos"><button type="button" data-v="4" aria-pressed="true">M = 4</button><button type="button" data-v="8" aria-pressed="false">8</button><button type="button" data-v="16" aria-pressed="false">16</button><button type="button" data-v="64" aria-pressed="false">64</button><button type="button" data-v="2048" aria-pressed="false">2048</button></div>
+              <div class="eq" aria-live="polite"></div>
+              <div class="legend"><span><i style="background:var(--c-sample)"></i>puntos muestreados</span><span><i style="background:var(--c-trace)"></i>curva que reconstruye la DFT</span></div>
+            </div>
+          </div>
+          <figcaption><b>La DFT con pocos puntos.</b> La curva dorada usa todos los coeficientes que da la DFT y pasa exactamente por los puntos muestreados. Entre punto y punto inventa lo más suave posible.</figcaption>
+        </figure>
+      </section>
+
+      <!-- 9 -->
+      <section class="lesson" id="paso-9">
+        <h2><span class="no">9</span>Un SVG de verdad</h2>
+        <p>Un SVG es una lista de instrucciones para un lápiz: <code>M</code> (mover sin dibujar), <code>L</code> (línea), <code>C</code> (curva de Bézier cúbica), <code>Q</code> (Bézier cuadrática), <code>A</code> (arco) y <code>Z</code> (cerrar). Una Bézier cúbica es un polinomio con cuatro puntos de control:</p>
+        <div class="math">\[ B(s) = (1-s)^3 P_0 + 3(1-s)^2 s\,P_1 + 3(1-s)s^2 P_2 + s^3 P_3, \qquad 0 \le s \le 1. \]</div>
+        <p>No hace falta integrar polinomios. La receta es la de siempre:</p>
+        <ol>
+          <li><strong>Medir y muestrear.</strong> <code>getTotalLength()</code> da el largo del trazo y <code>getPointAtLength(d)</code> da el punto a la distancia <code>d</code> del comienzo. Pedir \(M\) puntos equiespaciados hace que el lápiz vaya a velocidad constante.</li>
+          <li><strong>Unir las partes.</strong> Si el SVG tiene varias piezas (letras, agujeros), hay que convertirlas en un solo recorrido cerrado. El Taller las une con puentes cortos que el lápiz recorre de ida y vuelta.</li>
+          <li><strong>FFT.</strong> Con los \(M\) puntos se calculan los \(M\) coeficientes \(c_n\).</li>
+          <li><strong>Ordenar.</strong> Se ordenan por radio \(|c_n|\) y se usan los \(N\) más grandes.</li>
+          <li><strong>Dibujar.</strong> El centro de cada círculo es la suma de los anteriores: \(c_0\), después \(c_0 + c_{n_1}e^{2\pi i n_1 t}\), y así.</li>
+        </ol>
+        <p>La «ecuación» del dibujo no es una fórmula cerrada: es la lista de coeficientes. Cada círculo son tres números: \(n\), \(|c_n|\) y \(\arg c_n\). Con 100 círculos, la ecuación de un dibujo cualquiera son 300 números.</p>
+        <figure class="fig" id="figI">
+          <div class="fig-body side">
+            <div class="stagebox"><canvas class="stage" style="aspect-ratio: 1.15"></canvas></div>
+            <div class="ctrl">
+              <div class="rowbtns" role="group" aria-label="Ejemplos de trazo"><button class="btn" type="button" data-preset="corazon">Corazón</button><button class="btn" type="button" data-preset="gota">Gota</button><button class="btn" type="button" data-preset="estrella">Estrella</button><button class="btn" type="button" data-preset="nota">Nota</button></div>
+              <div class="field-d"><label for="svgPathD">Atributo <code>d</code> del trazo</label><textarea id="svgPathD" spellcheck="false"></textarea></div>
+              <p class="err" data-msg></p>
+              <div class="seg" data-k="mode" role="group" aria-label="Modo"><button type="button" data-v="1" aria-pressed="true">1 eje</button><button type="button" data-v="2" aria-pressed="false">2 ejes</button></div>
+              <div class="seg" data-k="M" role="group" aria-label="Puntos"><button type="button" data-v="16" aria-pressed="false">M = 16</button><button type="button" data-v="64" aria-pressed="false">64</button><button type="button" data-v="256" aria-pressed="true">256</button><button type="button" data-v="2048" aria-pressed="false">2048</button></div>
+              <label class="rng"><span data-l="N">Círculos N <output data-o="N"></output></span><input type="range" data-k="N" min="1" max="100" step="1" value="20"></label>
+              <div class="eq" aria-live="polite"></div>
+            </div>
+          </div>
+          <figcaption><b>De un trazo SVG a sus coeficientes.</b> Elegí un ejemplo o pegá el atributo <code>d</code> de un <code>&lt;path&gt;</code> con una sola pieza. Los puntos violetas son las muestras equiespaciadas.</figcaption>
+        </figure>
+        <p>El código, en JavaScript dentro de una página web:</p>
+<pre><code>const path = document.querySelector('path');      // un &lt;path&gt; del SVG, ya en la página
+const L = path.getTotalLength(), M = 2048;
+const re = new Float64Array(M), im = new Float64Array(M);
+for (let k = 0; k &lt; M; k++) {
+  const p = path.getPointAtLength(L * k / M);       // puntos equiespaciados sobre el trazo
+  re[k] = p.x;
+  im[k] = -p.y;                                     // en SVG la y apunta hacia abajo
+}
+fft(re, im);                                        // FFT en el lugar
+// el coeficiente c_n está en la posición j = n (o j = M + n si n &lt; 0), dividido por M
+const c = j =&gt; [re[j] / M, im[j] / M];</code></pre>
+      </section>
+
+      <!-- 10 -->
+      <section class="lesson" id="paso-10">
+        <h2><span class="no">10</span>¿Cuántos círculos hacen falta?</h2>
+        <p>La igualdad de Parseval dice que la «energía» del dibujo se reparte entre los coeficientes. El error cuadrático medio de usar solo los términos de un conjunto \(K_N\) es exactamente lo que dejaste afuera:</p>
+        <div class="math">\[ \int_0^1 \big|z(t) - z_N(t)\big|^2\,dt = \sum_{n\notin K_N} |c_n|^2. \]</div>
+        <p>Por eso conviene usar los de mayor radio. Qué tan rápido se achican depende de la forma:</p>
+        <ul>
+          <li><strong>Curva suave:</strong> muy rápido; pocos círculos alcanzan.</li>
+          <li><strong>Con esquinas (polígonos):</strong> \(|c_n|\) baja como \(1/n^2\) y el error como \(N^{-3/2}\). Con diez veces más círculos, el error se divide por 31.</li>
+          <li><strong>Con saltos</strong> (el lápiz pasa de un punto a otro sin recorrer el camino): \(|c_n|\) baja como \(1/n\) y el error solo como \(N^{-1/2}\). Con diez veces más círculos, el error apenas se divide por 3. Además, al lado del salto la aproximación se pasa un 9 % del tamaño del salto, por más círculos que agregues: es el fenómeno de Gibbs.</li>
+        </ul>
+        <p>Medidos sobre figuras de tamaño 1, el cuadrado tiene 0,26 % de error con 10 círculos, 0,008 % con 100 y 0,0003 % con 1000. La figura con un salto tiene 9,6 %, 3,2 % y 1,0 %. Por eso el Taller nunca hace saltar al lápiz: siempre lo lleva por un camino, visible u oculto.</p>
+        <figure class="fig" id="figJ">
+          <div class="fig-body side">
+            <div class="stagebox">
+              <canvas class="stage chart" style="aspect-ratio: 1.6"></canvas>
+              <canvas class="stage jump" style="aspect-ratio: 1.6"></canvas>
+            </div>
+            <div class="ctrl">
+              <div class="legend"><span><i style="background:var(--c-x)"></i>elipse (suave)</span><span><i style="background:var(--c-trace)"></i>cuadrado (esquinas)</span><span><i style="background:var(--c-y)"></i>semicírculo con salto</span></div>
+              <label class="rng"><span>Círculos para la figura con salto <output data-o="N"></output></span><input type="range" data-k="N" min="2" max="200" step="1" value="30"></label>
+              <div class="eq" aria-live="polite"></div>
+            </div>
+          </div>
+          <figcaption><b>Arriba:</b> error medio (en % del tamaño) según la cantidad de círculos, en escala logarítmica. <b>Abajo:</b> un semicírculo cuyo lápiz salta de arriba a abajo sin recorrer el camino. Cerca del salto, la aproximación siempre se pasa.</figcaption>
+        </figure>
+      </section>
+
+      <!-- 11 -->
+      <section class="lesson" id="paso-11">
+        <h2><span class="no">11</span>La velocidad cambia la receta</h2>
+        <p>Los coeficientes describen el movimiento del lápiz, no solo la forma. Este corazón, recorrido con el tiempo de su fórmula,</p>
+        <div class="math">\[ x(t) = 16\,\operatorname{sen}^3 2\pi t, \qquad y(t) = 13\cos 2\pi t - 5\cos 4\pi t - 2\cos 6\pi t - \cos 8\pi t, \]</div>
+        <p>tiene exactamente 8 coeficientes distintos de cero (\(n = \pm1, \dots, \pm4\)): con 8 círculos queda perfecto. En 2 ejes alcanza con 6, porque \(x(t) = 12\,\operatorname{sen} 2\pi t - 4\,\operatorname{sen} 6\pi t\) tiene solo 2 armónicos e \(y(t)\) tiene 4.</p>
+        <p>El mismo corazón recorrido a velocidad constante necesita infinitos círculos, aunque se achican rápido. La forma no cambió; cambió la velocidad, y con ella todos los coeficientes.</p>
+        <figure class="fig" id="figK">
+          <div class="fig-body">
+            <div class="stagebox" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+              <div style="display:grid;gap:6px;min-width:0"><canvas class="stage ka" style="aspect-ratio: 1.05"></canvas><canvas class="stage kas" style="aspect-ratio: 3"></canvas><p class="live" data-la></p></div>
+              <div style="display:grid;gap:6px;min-width:0"><canvas class="stage kb" style="aspect-ratio: 1.05"></canvas><canvas class="stage kbs" style="aspect-ratio: 3"></canvas><p class="live" data-lb></p></div>
+            </div>
+            <div class="ctrl">
+              <label class="rng"><span>Círculos N <output data-o="N"></output></span><input type="range" data-k="N" min="1" max="40" step="1" value="8"></label>
+            </div>
+          </div>
+          <figcaption><b>Izquierda:</b> el corazón con el tiempo de su fórmula. <b>Derecha:</b> el mismo corazón a velocidad constante. Debajo de cada uno, el radio \(|c_n|\) para \(n\) de −12 a 12.</figcaption>
+        </figure>
+        <div class="idea"><b class="tag">Idea</b>Muestrear a velocidad constante no da la receta más corta para cada figura, pero sirve para cualquier SVG y da resultados predecibles. Es lo que hace el Taller.</div>
+      </section>
+
+      <!-- Resumen -->
+      <section class="lesson" id="resumen">
+        <h2><span class="no">·</span>Resumen de fórmulas</h2>
+        <div class="cheat">
+          <div><h4>1 eje</h4>\[ z(t) = \sum_n c_n e^{2\pi i n t}, \qquad c_n = \int_0^1 z(t)\,e^{-2\pi i n t}\,dt \]Círculo \(n\): radio \(|c_n|\), arranque \(\arg c_n\), \(n\) vueltas por ciclo.</div>
+          <div><h4>2 ejes</h4>\[ x(t) = a_0 + \sum_k \big(a_k\cos 2\pi kt + b_k\,\operatorname{sen} 2\pi kt\big) \]\[ a_k = 2\!\int_0^1\! x\cos 2\pi kt\,dt \]\[ b_k = 2\!\int_0^1\! x\,\operatorname{sen} 2\pi kt\,dt \]Igual para \(y\) con \(p_k, q_k\). Círculo \(k\): radio \(\sqrt{a_k^2+b_k^2}\), desfase \(\operatorname{atan2}(b_k, a_k)\).</div>
+          <div><h4>Traductor</h4>\[ c_{\pm k} = \tfrac12\big[(a_k \pm q_k) + i\,(p_k \mp b_k)\big], \qquad c_0 = a_0 + i p_0 \]</div>
+          <div><h4>Polígonos</h4>\[ c_n = -\frac{1}{4\pi^2 n^2}\sum_k \Delta v_k\, e^{-2\pi i n t_k} \]Regular de \(k\) lados: \(c_{1+mk} = (-1)^m\,\dfrac{k^2 R\,\operatorname{sen}^2(\pi/k)}{\pi^2(1+mk)^2}\).</div>
+          <div><h4>Cualquier curva (DFT)</h4>\[ c_n \approx \frac1M\sum_{k=0}^{M-1} z_k\,e^{-2\pi i nk/M} \]Muestras equiespaciadas sobre el trazo; \(M\) varias veces mayor que \(N\).</div>
+          <div><h4>Error</h4>\[ \int_0^1 |z - z_N|^2\,dt = \sum_{n\notin K_N}|c_n|^2 \]Esquinas: \(|c_n| \sim 1/n^2\). Saltos: \(|c_n| \sim 1/n\) y Gibbs (9 %).</div>
+        </div>
+        <p class="foot">Todas las fórmulas y los valores de esta página están verificados contra la FFT de NumPy con 2048 puntos o más. Para hacer el video de cualquier figura, usá el <a href="../../index.html#taller" target="_top" data-abrir="taller">Taller de Epiciclos</a>.</p>
+      </section>
+    </article>
+  </div>
+</div>
+<svg id="svgHost" width="0" height="0" style="position:absolute;left:-9999px;top:0" aria-hidden="true"><path id="svgProbe" d="M0 0"/></svg>
+<script src="tutorial.js"></script>
+</body>
+</html>

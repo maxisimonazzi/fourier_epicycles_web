@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fourier interactivo</title>
+<meta name="description" content="Herramientas para ver cómo una señal periódica, o cualquier dibujo, se arma sumando senoidales que giran: series de Fourier, epiciclos y análisis de señales en el navegador.">
+<script>(() => { let t = new URLSearchParams(location.search).get('tema'); try { t = t || localStorage.getItem('fourier:tema'); } catch {} if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; })();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="portada/portada.css">
+</head>
+<body>
+<header class="barra">
+  <a class="marca" href="#inicio" data-id="inicio" aria-label="Fourier interactivo: inicio">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="11" cy="16" r="8.5"/><circle cx="16.6" cy="10.4" r="3.2"/><path class="v" d="M11 16 L16.6 10.4 L19 8.7"/><path class="o" d="M19 8.7 H31"/></svg>
+    <span>Fourier interactivo</span>
+  </a>
+  <nav class="nav" aria-label="Herramientas">
+    <a href="#inicio" data-id="inicio">Inicio</a>
+    <a href="#series" data-id="series"><span class="largo">Series de Fourier</span><span class="corto">Series</span></a>
+    <a href="#tutorial" data-id="tutorial"><span class="largo">Del círculo al SVG</span><span class="corto">Tutorial</span></a>
+    <a href="#taller" data-id="taller"><span class="largo">Taller de epiciclos</span><span class="corto">Taller</span></a>
+  </nav>
+  <button class="tema" id="tema" type="button" aria-label="Cambiar a modo oscuro" title="Cambiar a modo oscuro">
+    <svg class="luna" viewBox="0 0 256 256" aria-hidden="true"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></svg>
+    <svg class="sol" viewBox="0 0 256 256" aria-hidden="true"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></svg>
+  </button>
+</header>
+
+<main id="portada" class="inicio">
+  <section class="hero" aria-labelledby="titulo">
+    <div class="hero-texto">
+      <h1 id="titulo">Sumar círculos que giran para dibujar cualquier señal</h1>
+      <p class="dek">Tres herramientas para ver cómo una señal periódica, o cualquier dibujo, se arma sumando senoidales. Se usan desde esta página, sin instalar nada.</p>
+      <div class="acciones">
+        <a class="btn primario" href="#series">Empezar por las series</a>
+        <a class="btn" href="#tutorial">Ver el tutorial</a>
+      </div>
+    </div>
+    <figure class="demo">
+      <canvas id="demo" role="img" aria-label="Animación: los epiciclos de una onda cuadrada suman cada vez más armónicas y la onda se acerca a la cuadrada ideal"></canvas>
+      <figcaption>Una onda cuadrada armada con <b id="demoN">1</b> <span id="demoTxt">armónica</span>. Cada círculo es una armónica; la altura de la punta es la suma.</figcaption>
+    </figure>
+  </section>
+
+  <section class="recorrido" aria-labelledby="recorridoTit">
+    <div class="sec-head">
+      <h2 id="recorridoTit">Tres herramientas, un recorrido</h2>
+      <p>Se pueden abrir en cualquier orden. Si recién empezás, seguí la numeración: de las señales al plano, y del plano a cualquier dibujo.</p>
+    </div>
+    <div class="tarjetas">
+      <article class="tarjeta">
+        <svg class="ilus" viewBox="0 0 240 80" data-ilus="series" aria-hidden="true"><g class="c"></g><path class="b"/><path class="t"/></svg>
+        <div class="t-cuerpo">
+          <p class="t-num">1 · Señales</p>
+          <h3>Series de Fourier</h3>
+          <p>Armá una onda cuadrada, triangular, diente de sierra o rectificada sumando hasta 200 armónicas. Mirá cómo la dibujan los epiciclos y medí qué pasa con el valor eficaz, la potencia, la distorsión y el fenómeno de Gibbs.</p>
+          <ul class="t-tags"><li>Laboratorio</li><li>Análisis</li><li>Fundamentos</li></ul>
+          <a class="btn primario" href="#series">Abrir las series</a>
+        </div>
+      </article>
+      <article class="tarjeta">
+        <svg class="ilus" viewBox="0 0 240 80" data-ilus="tutorial" aria-hidden="true"><g class="c"></g><path class="t"/></svg>
+        <div class="t-cuerpo">
+          <p class="t-num">2 · Del círculo al plano</p>
+          <h3>Del círculo al SVG</h3>
+          <p>Tutorial en doce pasos: de un círculo a un dibujo cualquiera. Cómo se calcula cada coeficiente, por qué alcanzan pocos círculos para algunas figuras y muchos para otras, con figuras que se mueven.</p>
+          <ul class="t-tags"><li>1 eje y 2 ejes</li><li>Polígonos</li><li>DFT</li></ul>
+          <a class="btn primario" href="#tutorial">Abrir el tutorial</a>
+        </div>
+      </article>
+      <article class="tarjeta">
+        <svg class="ilus" viewBox="0 0 240 80" data-ilus="taller" aria-hidden="true"><g class="c"></g><path class="b"/><path class="t"/></svg>
+        <div class="t-cuerpo">
+          <p class="t-num">3 · Cualquier dibujo</p>
+          <h3>Taller de epiciclos</h3>
+          <p>Elegí una figura, subí un SVG o una imagen, escribí un texto o dibujá a mano, y mirá cómo una cadena de círculos lo dibuja. Exportá el video, la imagen final o los coeficientes.</p>
+          <ul class="t-tags"><li>Ejemplos</li><li>Dibujo a mano</li><li>Video</li></ul>
+          <a class="btn primario" href="#taller">Abrir el taller</a>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <footer class="pie">
+    <p>Funciona en el navegador. Las fórmulas (MathJax) y las tipografías se descargan de internet; sin conexión las herramientas andan igual, con las fórmulas escritas como texto.</p>
+    <p>Versión original en Python: <a href="https://github.com/maxisimonazzi/fourier_epicycles_matplotlib" target="_blank" rel="noopener">fourier_epicycles_matplotlib</a>. El código y cómo está armado este sitio están en el README.</p>
+  </footer>
+</main>
+
+<section id="visor" class="visor" aria-label="Herramienta abierta" hidden></section>
+
+<script src="portada/portada.js"></script>
+</body>
+</html>

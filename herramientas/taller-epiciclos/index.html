@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Taller de Epiciclos</title>
+<meta name="description" content="Una cadena de círculos dibuja cualquier figura: ejemplos, SVG, imagen, texto o dibujo a mano. Exporta video, imagen y coeficientes.">
+<script>(() => { let t = new URLSearchParams(location.search).get('tema'); try { t = t || localStorage.getItem('fourier:tema'); } catch {} if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; })();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Spectral:wght@600&display=swap">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Taller de Epiciclos</h1>
+      <p>Elegí una figura y una cadena de círculos la dibuja. Cada círculo es un término de una serie de Fourier; exportás el resultado como video vertical para reels.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Secciones">
+      <button role="tab" id="tab-studio" aria-selected="true" aria-controls="studio">Estudio</button>
+      <button role="tab" id="tab-explain" aria-selected="false" aria-controls="explain">Cómo funciona</button>
+    </nav>
+  </header>
+
+  <main id="studio" class="studio" role="tabpanel" aria-labelledby="tab-studio">
+    <section class="stage-wrap" aria-label="Vista previa">
+      <div class="stage" id="stage">
+        <canvas id="view" role="img" aria-label="Animación: una cadena de círculos dibuja la figura elegida"></canvas>
+        <canvas id="drawpad" hidden aria-label="Superficie para dibujar a mano"></canvas>
+        <div class="drawhint" id="drawhint" hidden>Dibujá con el mouse o el dedo. Podés hacer varios trazos.</div>
+        <div class="dropmsg" id="dropmsg" hidden>Soltá el archivo para usarlo</div>
+      </div>
+      <div class="transport">
+        <button class="icon-btn" id="play" aria-label="Pausar"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIcon" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+        <button class="icon-btn" id="restart" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg></button>
+        <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Posición en la animación">
+        <span class="time" id="time">0:00 / 0:00</span>
+      </div>
+      <div class="readout" id="readout" aria-live="polite"></div>
+    </section>
+
+    <aside class="panel" aria-label="Controles">
+      <section class="sec">
+        <h2><span class="num">1</span>Figura</h2>
+        <div class="seg" id="srcSeg" role="group" aria-label="Origen de la figura">
+          <button data-src="ejemplos" aria-pressed="true">Ejemplos</button>
+          <button data-src="svg" aria-pressed="false">SVG</button>
+          <button data-src="imagen" aria-pressed="false">Imagen</button>
+          <button data-src="texto" aria-pressed="false">Texto</button>
+          <button data-src="dibujo" aria-pressed="false">Dibujar</button>
+        </div>
+        <div class="srcpane" data-pane="ejemplos">
+          <div class="examples" id="examples"></div>
+          <p class="fine" style="margin-top:8px">Siluetas de animales y objetos: Font Awesome Free (CC BY 4.0). Si las usás en un video, mencioná la fuente.</p>
+        </div>
+        <div class="srcpane" data-pane="svg" hidden>
+          <div class="field">
+            <label class="drop" for="svgFile"><input type="file" id="svgFile" accept=".svg,image/svg+xml"><strong>Elegí un archivo SVG</strong><span>o arrastralo sobre la vista previa</span></label>
+          </div>
+          <div class="field">
+            <label for="minFrac">Ignorar trazos más cortos que <output id="minFracOut">0,2 %</output></label>
+            <input type="range" id="minFrac" min="0" max="3" step="0.1" value="0.2">
+          </div>
+          <p class="fine">Funciona mejor con siluetas o dibujos de línea. Si el SVG tiene texto, convertilo a trazos antes (en Inkscape: Trayecto → Objeto a trayecto).</p>
+        </div>
+        <div class="srcpane" data-pane="imagen" hidden>
+          <div class="field">
+            <label class="drop" for="imgFile"><input type="file" id="imgFile" accept="image/png,image/jpeg,image/webp"><strong>Elegí una imagen</strong><span>PNG con transparencia o silueta oscura sobre fondo claro</span></label>
+          </div>
+          <div class="field">
+            <label for="imgThr">Umbral <output id="imgThrOut">50 %</output></label>
+            <input type="range" id="imgThr" min="10" max="90" value="50">
+          </div>
+          <label class="check"><input type="checkbox" id="imgInv"> Invertir: figura clara sobre fondo oscuro</label>
+        </div>
+        <div class="srcpane" data-pane="texto" hidden>
+          <div class="field"><label for="txt">Texto o emoji</label><input type="text" id="txt" value="Fourier" maxlength="24"></div>
+          <div class="field"><label for="txtFont">Tipografía</label>
+            <select id="txtFont"><option value="serif">Serif (Spectral)</option><option value="sans">Sans (Hanken Grotesk)</option><option value="emoji">Emoji del sistema</option></select>
+          </div>
+          <button class="btn" id="txtGo">Trazar el texto</button>
+        </div>
+        <div class="srcpane" data-pane="dibujo" hidden>
+          <p class="fine">Dibujá sobre la vista previa. Podés hacer varios trazos; después se unen solos en un recorrido.</p>
+          <div class="row" style="margin-top:8px"><button class="btn" id="drawClear">Borrar</button><button class="btn primary" id="drawUse">Usar este dibujo</button></div>
+        </div>
+        <p class="status" id="figStatus" role="status"></p>
+      </section>
+
+      <section class="sec">
+        <h2><span class="num">2</span>Epiciclos</h2>
+        <div class="field">
+          <span class="lbl">Construcción</span>
+          <div class="seg" id="modeSeg" role="group" aria-label="Construcción">
+            <button data-mode="complex" aria-pressed="true">Una cadena</button>
+            <button data-mode="xy" aria-pressed="false">Dos series: x e y</button>
+          </div>
+          <p class="fine" id="modeHint"></p>
+        </div>
+        <div class="field">
+          <label for="nRange"><span id="nLabel">Círculos</span> <output id="nOut">120</output></label>
+          <input type="range" id="nRange" min="0" max="1000" value="700">
+          <div class="quick" id="nQuick" role="group" aria-label="Cantidades rápidas">
+            <button data-n="1">1</button><button data-n="3">3</button><button data-n="10">10</button><button data-n="30">30</button><button data-n="100">100</button><button data-n="300">300</button><button data-n="max">máx</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="order">Qué términos usar</label>
+          <select id="order"><option value="amp">Los de mayor radio (menor error)</option><option value="freq">Por frecuencia: 1, −1, 2, −2…</option></select>
+        </div>
+        <div class="field">
+          <label for="join">Unión entre las partes de la figura</label>
+          <select id="join"><option value="bridge-hidden">Puentes ocultos (recomendado)</option><option value="bridge-visible">Puentes visibles</option><option value="jump">Lápiz levantado entre partes</option></select>
+        </div>
+        <div class="charts">
+          <figure class="chart-card">
+            <figcaption>Espectro <span id="specCap">radio de cada círculo, escala log</span></figcaption>
+            <canvas id="specChart" aria-label="Espectro de coeficientes"></canvas>
+            <p class="note" id="specNote"></p>
+          </figure>
+          <figure class="chart-card">
+            <figcaption>Error según los círculos <span>escala log</span></figcaption>
+            <canvas id="errChart" aria-label="Error de la aproximación según la cantidad de círculos"></canvas>
+            <p class="note" id="errNote"></p>
+          </figure>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2><span class="num">3</span>Animación</h2>
+        <div class="seg" id="scriptSeg" role="group" aria-label="Guion">
+          <button data-script="single" aria-pressed="true">Un dibujo</button>
+          <button data-script="progressive" aria-pressed="false">N creciente</button>
+        </div>
+        <p class="fine" id="scriptHint"></p>
+        <div class="field"><label for="drawSec" id="drawSecLbl">Duración del dibujo <output id="drawSecOut">12 s</output></label><input type="range" id="drawSec" min="3" max="40" step="0.5" value="12"></div>
+        <div class="field" id="stepField" hidden><label for="stepSec">Segundos por paso <output id="stepSecOut">1,4 s</output></label><input type="range" id="stepSec" min="0.5" max="4" step="0.1" value="1.4"></div>
+        <div class="field"><label for="holdSec">Pausa final <output id="holdSecOut">2,5 s</output></label><input type="range" id="holdSec" min="0" max="8" step="0.5" value="2.5"></div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="showCircles" checked> Círculos</label>
+          <label class="check"><input type="checkbox" id="showArms" checked> Vectores</label>
+          <label class="check"><input type="checkbox" id="showGhost" checked> Silueta guía</label>
+          <label class="check"><input type="checkbox" id="showFormula" checked> Fórmula</label>
+          <label class="check"><input type="checkbox" id="showCounter" checked> Contador N</label>
+          <label class="check"><input type="checkbox" id="fadeEnd" checked> Ocultar círculos al final</label>
+        </div>
+        <div class="field" id="camField">
+          <span class="lbl">Cámara</span>
+          <div class="seg" id="camSeg" role="group" aria-label="Cámara">
+            <button data-cam="fixed" aria-pressed="true">Fija</button>
+            <button data-cam="follow" aria-pressed="false">Sigue la punta</button>
+          </div>
+        </div>
+        <div class="field" id="zoomField" hidden><label for="zoom">Zoom sobre la punta <output id="zoomOut">8×</output></label><input type="range" id="zoom" min="2" max="40" value="8"></div>
+      </section>
+
+      <section class="sec">
+        <h2><span class="num">4</span>Formato y textos</h2>
+        <div class="seg" id="fmtSeg" role="group" aria-label="Formato">
+          <button data-fmt="9:16" aria-pressed="true">9:16 Reel</button>
+          <button data-fmt="4:5" aria-pressed="false">4:5</button>
+          <button data-fmt="1:1" aria-pressed="false">1:1</button>
+          <button data-fmt="16:9" aria-pressed="false">16:9</button>
+        </div>
+        <div class="field"><span class="lbl">Estilo del video</span><div class="swatches" id="themeSw" role="group" aria-label="Estilo del video"></div></div>
+        <div class="field"><label for="title">Título</label><input type="text" id="title" maxlength="70"></div>
+        <div class="field"><label for="subtitle">Bajada</label><input type="text" id="subtitle" maxlength="120"></div>
+        <div class="field"><label for="handle">Firma</label><input type="text" id="handle" maxlength="40"></div>
+      </section>
+
+      <section class="sec">
+        <h2><span class="num">5</span>Exportar</h2>
+        <div class="seg" id="fpsSeg" role="group" aria-label="Cuadros por segundo">
+          <button data-fps="30" aria-pressed="true">30 fps</button>
+          <button data-fps="60" aria-pressed="false">60 fps</button>
+        </div>
+        <p class="fine" id="exportInfo"></p>
+        <button class="btn primary wide" id="exportVideo">Exportar video</button>
+        <div class="progress" id="progress" hidden><i></i></div>
+        <p class="status" id="exportStatus" role="status"></p>
+        <div class="row"><button class="btn" id="exportPng">Imagen final (PNG)</button><button class="btn" id="exportJson">Coeficientes (JSON)</button></div>
+        <p class="fine">El video se arma cuadro por cuadro en tu navegador. La figura no se sube a ningún servidor.</p>
+      </section>
+    </aside>
+  </main>
+
+  <main id="explain" class="explain" role="tabpanel" aria-labelledby="tab-explain" hidden>
+    <article>
+      <p class="lead">Una figura cualquiera, recorrida como un punto que se mueve, se puede escribir como una suma de vectores que giran. Cada vector es un círculo. Esta página hace ese cálculo con la figura que elijas en el Estudio y lo convierte en video.</p>
+      <p class="callout">Esto es el resumen. El tutorial completo, con figuras interactivas y las cuentas hechas para el círculo, la elipse, el cuadrado, los polígonos y un SVG, está en <a href="../../index.html#tutorial" target="_top" data-abrir="tutorial">Del círculo al SVG</a>.</p>
+
+      <h2><span class="step">1</span>La figura como un punto que se mueve</h2>
+      <p>Recorremos el contorno a velocidad constante mientras un tiempo \(t\) va de 0 a 1. En cada instante el lápiz está en un punto del plano. Si escribimos ese punto como número complejo, toda la figura queda guardada en una sola función periódica:</p>
+      <div class="math">\[ z(t) = x(t) + i\,y(t), \qquad z(t+1) = z(t). \]</div>
+
+      <h2><span class="step">2</span>Un círculo es un número complejo</h2>
+      <p>La serie de Fourier escribe ese movimiento como una suma de términos que giran a velocidades enteras:</p>
+      <div class="math">\[ z(t) = \sum_{n=-\infty}^{\infty} c_n\, e^{2\pi i n t} \]</div>
+      <ul>
+        <li>\(|c_n|\) es el largo del vector, es decir, el radio de su círculo.</li>
+        <li>\(\arg c_n\) es el ángulo desde el que arranca.</li>
+        <li>\(n\) es cuántas vueltas da mientras el lápiz recorre la figura una vez. Si \(n\) es negativo, gira al revés.</li>
+        <li>\(c_0\) no gira: es el centro de masa del recorrido, donde se apoya la cadena.</li>
+      </ul>
+      <p>Sumar los vectores es ponerlos uno a continuación del otro. La punta del último es el lápiz.</p>
+
+      <h2><span class="step">3</span>De dónde salen los coeficientes</h2>
+      <div class="math">\[ c_n = \int_0^1 z(t)\, e^{-2\pi i n t}\, dt \]</div>
+      <p>Multiplicar por \(e^{-2\pi i n t}\) hace girar todo en sentido contrario a velocidad \(n\). El único término que queda quieto es el que giraba justo a esa velocidad; los demás dan vueltas completas y su promedio es cero. Promediar en \(t\) deja solo \(c_n\).</p>
+      <p>Con \(M\) puntos equiespaciados \(z_k = z(k/M)\), la integral se convierte en una suma. Esa suma es la transformada discreta de Fourier (DFT):</p>
+      <div class="math">\[ c_n \approx \frac{1}{M}\sum_{k=0}^{M-1} z_k\, e^{-2\pi i\, n k / M} \]</div>
+      <p>La FFT calcula los \(M\) coeficientes de una vez, con del orden de \(M \log_2 M\) operaciones. Acá \(M = 2048\) y el cálculo tarda unos milisegundos.</p>
+
+      <h2><span class="step">4</span>Del SVG a la curva</h2>
+      <ol>
+        <li><strong>Muestrear por longitud de arco.</strong> Un SVG está hecho de segmentos, curvas de Bézier y arcos. Se lee cada trazo, se lo aproxima con tramos rectos muy cortos y se toman puntos equiespaciados sobre ese recorrido. Así el lápiz va a velocidad constante. Si fuera más rápido en unos tramos que en otros, los coeficientes cambiarían aunque la figura fuera la misma.</li>
+        <li><strong>Unir las partes.</strong> Una figura con agujeros o con piezas sueltas no es una sola curva cerrada. La herramienta busca las conexiones más cortas entre todas las partes (un árbol de expansión mínima). El lápiz cruza cada puente, recorre la parte y vuelve por el mismo puente, así que la curva nunca salta. Con «puentes ocultos» ese camino de ida y vuelta existe pero no se dibuja.</li>
+        <li><strong>Calcular y ordenar.</strong> Se aplica la FFT a los 2048 puntos. Si vas a usar \(N\) círculos, los \(N\) de mayor radio dan el menor error posible para esa cantidad.</li>
+      </ol>
+
+      <h2><span class="step">5</span>Por qué más círculos dan más detalle</h2>
+      <p>Por la igualdad de Parseval, la «energía» de la figura se reparte entre los coeficientes, y el error cuadrático medio de quedarse solo con un conjunto \(K_N\) de términos es exactamente lo que se descarta:</p>
+      <div class="math">\[ \int_0^1 |z(t)|^2\,dt = \sum_{n} |c_n|^2, \qquad \text{error}^2 = \sum_{n \notin K_N} |c_n|^2 . \]</div>
+      <p>Por eso conviene usar los más grandes. Qué tan rápido se achican los coeficientes depende de la forma:</p>
+      <ul>
+        <li>En una curva suave decaen muy rápido y pocos círculos alcanzan.</li>
+        <li>Con esquinas decaen como \(1/n^2\): las puntas quedan redondeadas hasta que \(N\) es grande.</li>
+        <li>Con saltos, es decir cuando el lápiz pasa de un punto a otro sin recorrer el camino, decaen como \(1/n\) y aparece el fenómeno de Gibbs: cerca del salto la suma se pasa alrededor de un 9&nbsp;% y oscila, por más círculos que agregues. Por eso la herramienta nunca hace saltar al lápiz: siempre lo lleva por un camino, visible u oculto.</li>
+      </ul>
+      <p>Así mejora la figura que tenés elegida en el Estudio a medida que se suman círculos:</p>
+      <div class="multiples" id="multiples"></div>
+
+      <h2><span class="step">6</span>La versión con dos series (como el reel del colibrí)</h2>
+      <p>En lugar de una cadena compleja se usan dos series reales, una por coordenada:</p>
+      <div class="math">\[ x(t) = a_0 + \sum_{k=1}^{N} \big(a_k \cos 2\pi k t + b_k \sin 2\pi k t\big) \]
+      \[ y(t) = c_0 + \sum_{k=1}^{N} \big(c_k \cos 2\pi k t + d_k \sin 2\pi k t\big) \]</div>
+      <p>Cada serie se dibuja como su propia cadena. La de arriba controla \(x\): la posición horizontal de su punta es \(x(t)\). La de la izquierda controla \(y\). El lápiz está donde se cruzan las dos guías punteadas. Los coeficientes salen de la misma FFT: si \(X_k\) es la DFT de las coordenadas \(x\), entonces \(a_k = 2\,\mathrm{Re}\,X_k\) y \(b_k = -2\,\mathrm{Im}\,X_k\).</p>
+
+      <h2><span class="step">7</span>El cálculo, en pocas líneas</h2>
+      <p>En JavaScript, con los puntos ya muestreados en dos arreglos <code>x</code> e <code>y</code> de largo \(M\) (potencia de 2) y una función <code>fft</code> que transforma en el lugar:</p>
+<pre><code>const re = Float64Array.from(x), im = Float64Array.from(y);
+fft(re, im);                                   // DFT en O(M log M)
+const c0 = { re: re[0] / M, im: im[0] / M };   // centro de la cadena
+const terminos = [];
+for (let j = 1; j &lt; M; j++) {
+  const n = j &lt; M / 2 ? j : j - M;             // frecuencia con signo
+  terminos.push({ n, re: re[j] / M, im: im[j] / M });
+}
+terminos.sort((a, b) =&gt; Math.hypot(b.re, b.im) - Math.hypot(a.re, a.im));
+const usados = terminos.slice(0, N);           // los N círculos más grandes
+
+function lapiz(t) {                            // t entre 0 y 1
+  let px = c0.re, py = c0.im;
+  for (const { n, re, im } of usados) {
+    const a = 2 * Math.PI * n * t;             // c·e^{ia} = (re + i·im)(cos a + i·sen a)
+    px += re * Math.cos(a) - im * Math.sin(a);
+    py += re * Math.sin(a) + im * Math.cos(a);
+  }
+  return [px, py];                             // cada suma parcial es el centro de un círculo
+}</code></pre>
+      <p>Lo mismo en Python con NumPy:</p>
+<pre><code>import numpy as np
+z = x + 1j * y                                  # M muestras equiespaciadas
+M = len(z)
+c = np.fft.fft(z) / M                           # coeficientes c_n
+n = np.fft.fftfreq(M, 1 / M).astype(int)        # frecuencias con signo
+orden = np.argsort(-np.abs(c))
+orden = orden[n[orden] != 0][:N]                # los N más grandes, sin c_0
+t = np.linspace(0, 1, 4000, endpoint=False)
+dibujo = c[0] + (c[orden, None] * np.exp(2j * np.pi * n[orden, None] * t)).sum(axis=0)</code></pre>
+
+      <h2><span class="step">8</span>Cómo contarlo en un reel de 30 segundos</h2>
+      <ul class="beats">
+        <li><b>0-2 s</b><span>Gancho: el dibujo final, o una pregunta. «¿Cuántos círculos hacen falta para dibujar un dragón?»</span></li>
+        <li><b>2-12 s</b><span>N = 1, 2, 5, 10… El dibujo empieza como un círculo y de a poco se parece a algo. Que se vea el contador.</span></li>
+        <li><b>12-22 s</b><span>La idea en una frase: «cada círculo gira a una velocidad entera; Fourier dice cuánto mide cada uno y desde dónde arranca».</span></li>
+        <li><b>22-30 s</b><span>Figura completa y pregunta para comentarios: «¿Qué dibujo hago la próxima con 500 círculos?»</span></li>
+      </ul>
+      <p class="callout">En la descripción del reel conviene contar un detalle no obvio, por ejemplo que el orden y la velocidad con que el lápiz recorre la figura cambian todos los coeficientes, aunque la figura sea la misma.</p>
+    </article>
+  </main>
+</div>
+<div id="svgHost" aria-hidden="true"></div>
+<script src="taller.js"></script>
+</body>
+</html>
