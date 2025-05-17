@@ -19,14 +19,14 @@ La portada presenta las tres herramientas y se navega con los botones de la barr
 |---|---|---|
 | 1 | **Series de Fourier** | **Laboratorio:** epiciclos, onda resultante, espectro y ondas componentes de una cuadrada, triangular, diente de sierra o senoidal rectificada, con hasta 200 armónicas y modo AC/DC. **Análisis:** valor medio, eficaz, factores de cresta, forma y rizado, espectros de amplitud, fase y potencia, teorema de Parseval y ancho de banda, THD, convergencia, fenómeno de Gibbs (con σ de Lanczos y Fejér), autocorrelación, simetrías y tabla de coeficientes. **Fundamentos:** la teoría detrás de todo lo anterior. |
 | 2 | **Del círculo al SVG** | Tutorial en doce pasos: cómo se calculan los coeficientes de un dibujo hecho con epiciclos, en una cadena (números complejos) o en dos (ejes x e y), del círculo a un SVG cualquiera. |
-| 3 | **Taller de epiciclos** | Una cadena de círculos dibuja la figura que elijas: ejemplos, un SVG, una imagen, un texto o un dibujo a mano. Exporta video (WebM o MP4, según el navegador), la imagen final en PNG y los coeficientes en JSON. |
+| 3 | **Taller de epiciclos** | Una cadena de círculos dibuja la figura que elijas: ejemplos, un SVG, una imagen, un texto o un dibujo a mano. Exporta video MP4, la imagen final en PNG y los coeficientes en JSON. |
 
 ## Cómo usarlo
 
 - **En la computadora:** abrí `index.html` con doble clic. Funciona en Chrome, Edge, Firefox y Safari actuales.
 - **Enlaces directos:** la dirección indica la herramienta y la pestaña. Por ejemplo, `index.html#series/analisis` abre el Análisis y `index.html#taller` abre el Taller.
 
-Algunas partes se descargan de internet la primera vez: las fórmulas ([MathJax](https://www.mathjax.org/)), las tipografías (Google Fonts) y, en el Taller, el trazado de imágenes y textos ([d3-contour](https://github.com/d3/d3-contour)). Sin conexión lo demás funciona igual y las fórmulas se ven como texto TeX.
+Algunas partes se descargan de internet la primera vez: las fórmulas ([MathJax](https://www.mathjax.org/)), las tipografías (Google Fonts) y, en el Taller, el trazado de imágenes y textos ([d3-contour](https://github.com/d3/d3-contour)) y la exportación a MP4 ([mp4-muxer](https://github.com/Vanilagy/mp4-muxer)). Sin conexión lo demás funciona igual y las fórmulas se ven como texto TeX.
 
 ## Cómo está armado
 

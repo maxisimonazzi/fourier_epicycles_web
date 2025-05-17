@@ -177,7 +177,7 @@
           <button data-fps="60" aria-pressed="false">60 fps</button>
         </div>
         <p class="fine" id="exportInfo"></p>
-        <button class="btn primary wide" id="exportVideo">Exportar video</button>
+        <button class="btn primary wide" id="exportVideo">Exportar video MP4</button>
         <div class="progress" id="progress" hidden><i></i></div>
         <p class="status" id="exportStatus" role="status"></p>
         <div class="row"><button class="btn" id="exportPng">Imagen final (PNG)</button><button class="btn" id="exportJson">Coeficientes (JSON)</button></div>
@@ -283,6 +283,7 @@ dibujo = c[0] + (c[orden, None] * np.exp(2j * np.pi * n[orden, None] * t)).sum(a
   </main>
 </div>
 <div id="svgHost" aria-hidden="true"></div>
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js"></script>
 <script src="taller.js"></script>
 </body>
 </html>

@@ -1386,7 +1386,7 @@ function updateHints() {
 function updateExportInfo() {
   if (!state.tl) return;
   const [w, h] = FORMATS[cfg.fmt];
-  $('#exportInfo').textContent = `${w} × ${h} px · ${nf(state.tl.total, 1)} s · ${cfg.fps} fps`;
+  $('#exportInfo').textContent = `${w} × ${h} px · ${nf(state.tl.total, 1)} s · ${cfg.fps} fps · MP4 (H.264)`;
 }
 function bindRange(id, key, fmt, onChange, scale = 1) {
   const el = $(id), out = $(id + 'Out');
@@ -1537,6 +1537,48 @@ async function ensureFonts() {
 let exporting = false, cancelExport = false;
 // bitrate según el tamaño del cuadro: 16 Mbit/s para 1080×1920 a 30 cuadros por segundo
 const bitrateVideo = (W, H, fps) => Math.round((fps > 30 ? 24 : 16) * 1e6 * (W * H) / (1080 * 1920));
+async function pickEncoder(W, H, fps) {
+  if (typeof VideoEncoder === 'undefined' || !window.Mp4Muxer) return null;
+  const bitrate = bitrateVideo(W, H, fps);
+  const codecs = ['avc1.640033', 'avc1.64002A', 'avc1.640028', 'avc1.4D0033', 'avc1.4D002A', 'avc1.42E033', 'avc1.42E02A', 'avc1.42001F'];
+  for (const codec of codecs) {
+    const c = { codec, width: W, height: H, bitrate, framerate: fps, avc: { format: 'avc' } };
+    try { const r = await VideoEncoder.isConfigSupported(c); if (r.supported) return c; } catch { /* siguiente */ }
+  }
+  return null;
+}
+async function encodeMp4(cv, ctx, W, H, fps, total, config, bar) {
+  const frames = Math.round(total * fps);
+  const muxer = new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: 'avc', width: W, height: H, frameRate: fps }, fastStart: 'in-memory' });
+  let encErr = null;
+  const enc = new VideoEncoder({ output: (chunk, meta) => { try { muxer.addVideoChunk(chunk, meta); } catch (e) { encErr = e; } }, error: e => { encErr = e; } });
+  enc.configure(config);
+  const t0 = performance.now();
+  try {
+    for (let i = 0; i < frames; i++) {
+      if (cancelExport) throw new Error('cancel');
+      if (encErr) throw encErr;
+      state.layout = null;
+      render(ctx, W, H, Math.min(i / fps, total - 1e-4));
+      const vf = new VideoFrame(cv, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
+      enc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
+      vf.close();
+      while (enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 2));
+      if (i % 6 === 0) {
+        const p = (i + 1) / frames, el = (performance.now() - t0) / 1000;
+        bar.style.width = (100 * p).toFixed(1) + '%';
+        setStatus('#exportStatus', `Cuadro ${i + 1} de ${frames}` + (p > 0.05 ? ` · faltan ~${Math.ceil(el / p - el)} s` : ''));
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+    await enc.flush();
+    if (encErr) throw encErr;
+    muxer.finalize();
+  } finally {
+    if (enc.state !== 'closed') enc.close();
+  }
+  return new Blob([muxer.target.buffer], { type: 'video/mp4' });
+}
 async function exportVideo() {
   if (exporting) { cancelExport = true; return; }
   const [W, H] = FORMATS[cfg.fmt], fps = cfg.fps;
@@ -1552,8 +1594,16 @@ async function exportVideo() {
     const ctx = cv.getContext('2d', { alpha: false });
     const savedLayout = state.layout;
     await formulaLista(ctx, W, H);
-    setStatus('#exportStatus', 'Grabando en tiempo real (tarda lo que dura el video).');
-    const { blob, ext } = await recordRealtime(cv, ctx, W, H, fps, total, p => { bar.style.width = (100 * p).toFixed(1) + '%'; });
+    const config = await pickEncoder(W, H, fps);
+    let blob = null, ext = 'mp4';
+    if (config) {
+      // si el navegador codifica pero no entrega la configuración del H.264 (le pasa a Firefox), se graba en tiempo real
+      try { blob = await encodeMp4(cv, ctx, W, H, fps, total, config, bar); } catch (err) { if (err && err.message === 'cancel') throw err; }
+    }
+    if (!blob) {
+      setStatus('#exportStatus', 'Este navegador no codifica H.264 cuadro por cuadro; grabo en tiempo real (tarda lo que dura el video).');
+      ({ blob, ext } = await recordRealtime(cv, ctx, W, H, fps, total, p => { bar.style.width = (100 * p).toFixed(1) + '%'; }));
+    }
     state.layout = savedLayout;
     bar.style.width = '100%';
     const name = `epiciclos-${slug(state.fig.name)}-${cfg.mode === 'complex' ? 'N' : 'xy'}${cfg.N}-${cfg.fmt.replace(':', 'x')}.${ext}`;
@@ -1562,7 +1612,7 @@ async function exportVideo() {
   } catch (err) {
     setStatus('#exportStatus', err && err.message === 'cancel' ? 'Exportación cancelada.' : 'No se pudo exportar: ' + (err && err.message || err), !(err && err.message === 'cancel'));
   } finally {
-    exporting = false; btn.textContent = 'Exportar video';
+    exporting = false; btn.textContent = 'Exportar video MP4';
     setTimeout(() => { prog.hidden = true; }, 1200);
     requestRender(true);
   }
