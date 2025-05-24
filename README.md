@@ -44,14 +44,3 @@ node pruebas/verificar-nucleo.js
 ```
 
 Compara el núcleo con valores exactos: la THD de cada señal, la potencia por Parseval, el error eficaz, el sobrepico de Gibbs (8,949 % del salto), las pendientes de los coeficientes, las simetrías y los coeficientes contra una FFT de la señal ideal.
-
-## Video con Python (opcional)
-
-El Taller exporta los coeficientes de cualquier figura en JSON. `python/epiciclos_mpl.py` los convierte en un video MP4 con matplotlib, con el mismo enfoque que [fourier_epicycles_matplotlib](https://github.com/maxisimonazzi/fourier_epicycles_matplotlib):
-
-```bash
-python python/epiciclos_mpl.py figura.json --n 150
-python python/epiciclos_mpl.py --demo corazon --n 8
-```
-
-Necesita `numpy`, `matplotlib` y `ffmpeg` en el PATH.
